@@ -1,596 +1,742 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <stdbool.h>
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-#define TILE_SIZE 32
-#define MAP_SIZE 20
-#define GAME_SPEED 2
+// Constantes del juego
+#define ANCHO_VENTANA 1000
+#define ALTO_VENTANA 750
+#define TAM_CASILLA 28
+#define TAM_MAPA 27
+#define VEL_JUEGO 2
+#define MAX_ANIMALES 3
+#define MAX_MONEDAS 10
+#define RETARDO_MOV_ANIMAL 500
 
-#define NIVEL_CRITICO 0
-#define NIVEL_PELIGRO 15
-#define NIVEL_RECUPERACION 60
+// Constantes de jugador y combate
+#define VIDA_BASE 50
+#define VIDA_ARMADURA 70
+#define ATAQUE_BASE 10
+#define ATAQUE_ESPADA 15
+#define ATAQUE_COMPLETO 20
+#define VIDA_ANIMAL 40
+#define ATAQUE_ANIMAL 5
+#define NIVEL_CRITICO_BASE 6
+#define NIVEL_CRITICO_ARMADURA 10
+#define NIVEL_RECUPERACION_BASE 18
+#define NIVEL_RECUPERACION_ARMADURA 30
 
 typedef struct
 {
-    int x, y;
-    int salud;
-    int hambre;
-    int sed;
-    int energia;
+    int x, y, salud, hambre, sed, energia;
     int inventario[5];
-    int tiene_espada;
-    int tiene_armadura;
-    int golpes_recibidos;
+    int tiene_espada, tiene_armadura, golpes_recibidos;
+    int vida_maxima, ataque_actual;
+    int monedas_recogidas;
 } Jugador;
 
 typedef struct
 {
-    int x, y;
-    int vida;
-    int activo;
-    int daño_causado;
-    int ultimo_ataque;
+    int x, y, vida, activo, danio_causado;
+    Uint32 ultimo_ataque, ultimo_movimiento;
 } Animal;
 
 typedef struct
 {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-    SDL_Texture *arbolTexture;
-    SDL_Texture *rocaTexture;
-    SDL_Texture *amenazaTexture;
-    SDL_Texture *personajeTexture;
-    SDL_Texture *personajeRocaTexture;
-    SDL_Texture *personajeCompletoTexture;
-    SDL_Texture *carneTexture;
-    TTF_Font *font;
-} GameState;
+    int x, y, activa;
+} Moneda;
 
-int mapa[MAP_SIZE][MAP_SIZE];
+typedef struct
+{
+    SDL_Window *ventana;
+    SDL_Renderer *renderizador;
+    SDL_Texture *textura_arbol, *textura_roca, *textura_amenaza, *textura_personaje,
+        *textura_personaje_roca, *textura_personaje_completo, *textura_carne, *textura_oro;
+    TTF_Font *fuente;
+    Mix_Music *musica;
+    Mix_Chunk *sonido_lucha, *sonido_gameover, *sonido_moneda;
+} EstadoJuego;
+
+// Variables globales
+int mapa[TAM_MAPA][TAM_MAPA], experiencia = 0;
+Uint32 ultima_actualizacion_vida = 0;
 Jugador jugador;
-Animal animal_actual = {0, 0, 100, 0, 0, 0};
-int experiencia = 0;
-int combate_activo = 0;
-Uint32 ultimo_update_vida = 0;
+Animal animales[MAX_ANIMALES];
+Moneda moneda_actual = {0};
+SDL_Color color_agua = {64, 224, 208, 255};
+SDL_Color color_arena = {238, 214, 175, 255};
+SDL_Color color_pasto = {34, 139, 34, 255};
+SDL_Color color_blanco = {255, 255, 255, 255};
 
-const int islaShape[MAP_SIZE][MAP_SIZE] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1},
-    {0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
-    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
-    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
-    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0}};
+// Forma de la isla (matriz original mantenida para compatibilidad)
+const int forma_isla[27][27] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+    {0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+    {0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0},
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0},
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0},
+    {0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 
-SDL_Color colorAgua = {64, 224, 208, 255};
-SDL_Color colorArena = {238, 214, 175, 255};
-SDL_Color colorPasto = {34, 139, 34, 255};
-SDL_Color colorBlanco = {255, 255, 255, 255};
-
-void render_text(GameState *game, const char *text, int x, int y)
+/* Actualiza las estadísticas del jugador basadas en su equipamiento */
+void actualizar_stats_jugador(void)
 {
-    SDL_Surface *surface = TTF_RenderText_Solid(game->font, text, colorBlanco);
-    if (!surface)
+    jugador.vida_maxima = jugador.tiene_armadura ? VIDA_ARMADURA : VIDA_BASE;
+    jugador.ataque_actual = jugador.tiene_espada ? (jugador.tiene_armadura ? ATAQUE_COMPLETO : ATAQUE_ESPADA) : ATAQUE_BASE;
+    jugador.hambre = jugador.hambre > VIDA_BASE ? VIDA_BASE : jugador.hambre;
+    jugador.sed = jugador.sed > VIDA_BASE ? VIDA_BASE : jugador.sed;
+    jugador.salud = jugador.salud > jugador.vida_maxima ? jugador.vida_maxima : jugador.salud;
+}
+
+/* Genera una nueva moneda en una posición válida del mapa */
+void generar_moneda(void)
+{
+    if (jugador.monedas_recogidas >= MAX_MONEDAS)
         return;
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(game->renderer, surface);
-    if (!texture)
+    do
     {
-        SDL_FreeSurface(surface);
-        return;
-    }
-    SDL_Rect destRect = {x, y, surface->w, surface->h};
-    SDL_RenderCopy(game->renderer, texture, NULL, &destRect);
-    SDL_FreeSurface(surface);
-    SDL_DestroyTexture(texture);
+        moneda_actual.x = rand() % TAM_MAPA;
+        moneda_actual.y = rand() % TAM_MAPA;
+    } while (!forma_isla[moneda_actual.y][moneda_actual.x] || mapa[moneda_actual.y][moneda_actual.x] != 2);
+    moneda_actual.activa = 1;
 }
 
-void render_tile(SDL_Renderer *renderer, int x, int y, SDL_Color color)
-{
-    SDL_Rect tile = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
-    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderFillRect(renderer, &tile);
-}
-
-void render_game_over(GameState *game)
-{
-    SDL_SetRenderDrawColor(game->renderer, 0, 0, 0, 128);
-    SDL_Rect overlay = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
-    SDL_RenderFillRect(game->renderer, &overlay);
-    render_text(game, "¡GAME OVER!", WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 30);
-    render_text(game, "Presiona R para reiniciar o Q para salir", WINDOW_WIDTH / 2 - 200, WINDOW_HEIGHT / 2 + 10);
-}
-
-void actualizar_texturas_jugador(void)
-{
-    if (jugador.tiene_espada && jugador.tiene_armadura)
-    {
-        jugador.tiene_armadura = 1;
-        jugador.tiene_espada = 1;
-    }
-    else if (jugador.tiene_espada)
-    {
-        jugador.tiene_armadura = 0;
-        jugador.tiene_espada = 1;
-    }
-    else
-    {
-        jugador.tiene_armadura = 0;
-        jugador.tiene_espada = 0;
-    }
-}
-
-void aplicar_daño_jugador(float daño)
-{
-    jugador.golpes_recibidos++;
-
-    if (jugador.tiene_armadura && jugador.tiene_espada)
-    {
-        if (jugador.golpes_recibidos >= 3)
-        {
-            jugador.tiene_armadura = 0;
-            jugador.golpes_recibidos = 0;
-        }
-    }
-    else if (jugador.tiene_espada)
-    {
-        if (jugador.golpes_recibidos >= 2)
-        {
-            jugador.salud = 0;
-        }
-    }
-    else
-    {
-        jugador.salud -= daño;
-        if (jugador.golpes_recibidos >= 3)
-        {
-            jugador.salud = 0;
-        }
-    }
-    actualizar_texturas_jugador();
-}
-
-int distancia_manhattan(int x1, int y1, int x2, int y2)
+/* Calcula la distancia Manhattan entre dos puntos */
+int distancia_manhattan(int x1, int x2, int y1, int y2)
 {
     return abs(x1 - x2) + abs(y1 - y2);
 }
 
-void actualizar_estado_jugador(void)
+/* Mueve un animal hacia el jugador siguiendo la ruta más directa */
+void mover_animal_hacia_jugador(Animal *animal)
 {
-    Uint32 tiempo_actual = SDL_GetTicks();
-    if (tiempo_actual - ultimo_update_vida < 1000)
+    if (!animal->activo || SDL_GetTicks() - animal->ultimo_movimiento < RETARDO_MOV_ANIMAL)
         return;
 
-    ultimo_update_vida = tiempo_actual;
+    int dx = animal->x < jugador.x ? 1 : (animal->x > jugador.x ? -1 : 0);
+    int dy = animal->y < jugador.y ? 1 : (animal->y > jugador.y ? -1 : 0);
 
-    if (jugador.hambre > NIVEL_RECUPERACION && jugador.sed > NIVEL_RECUPERACION)
+    if (abs(jugador.x - animal->x) > abs(jugador.y - animal->y))
     {
-        if (jugador.salud < 20)
-            jugador.salud++;
-    }
-
-    if (jugador.hambre <= NIVEL_CRITICO || jugador.sed <= NIVEL_CRITICO)
-    {
-        jugador.salud = (jugador.salud > 0) ? jugador.salud - 2 : 0;
-    }
-    else if (jugador.hambre <= NIVEL_PELIGRO && jugador.sed <= NIVEL_PELIGRO)
-    {
-        jugador.salud = (jugador.salud > 0) ? jugador.salud - 1 : 0;
-    }
-    else if (jugador.hambre <= NIVEL_PELIGRO || jugador.sed <= NIVEL_PELIGRO)
-    {
-        if (rand() % 2 == 0)
-        {
-            jugador.salud = (jugador.salud > 0) ? jugador.salud - 1 : 0;
-        }
-    }
-}
-
-void init_mapa(void)
-{
-    for (int i = 0; i < MAP_SIZE; i++)
-    {
-        for (int j = 0; j < MAP_SIZE; j++)
-        {
-            if (islaShape[i][j] == 0)
-            {
-                mapa[i][j] = 0;
-            }
-            else
-            {
-                int es_borde = 0;
-                if (i > 0 && islaShape[i - 1][j] == 0)
-                    es_borde = 1;
-                if (i < MAP_SIZE - 1 && islaShape[i + 1][j] == 0)
-                    es_borde = 1;
-                if (j > 0 && islaShape[i][j - 1] == 0)
-                    es_borde = 1;
-                if (j < MAP_SIZE - 1 && islaShape[i][j + 1] == 0)
-                    es_borde = 1;
-
-                if (es_borde)
-                {
-                    mapa[i][j] = 1;
-                }
-                else
-                {
-                    int r = rand() % 100;
-                    if (r < 20)
-                        mapa[i][j] = 4;
-                    else if (r < 30)
-                        mapa[i][j] = 3;
-                    else if (r < 35)
-                        mapa[i][j] = 5;
-                    else
-                        mapa[i][j] = 2;
-                }
-            }
-        }
-    }
-}
-
-void reiniciar_juego(Jugador *jugador)
-{
-    jugador->x = MAP_SIZE / 2;
-    jugador->y = MAP_SIZE / 2;
-    jugador->salud = 20;
-    jugador->hambre = 20;
-    jugador->sed = 20;
-    jugador->energia = 100;
-    jugador->tiene_espada = 0;
-    jugador->tiene_armadura = 0;
-    jugador->golpes_recibidos = 0;
-    experiencia = 0;
-    for (int i = 0; i < 5; i++)
-    {
-        jugador->inventario[i] = 0;
-    }
-    animal_actual.activo = 0;
-    animal_actual.daño_causado = 0;
-    animal_actual.ultimo_ataque = 0;
-    combate_activo = 0;
-}
-
-int init_game(GameState *game)
-{
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
-    {
-        printf("SDL error: %s\n", SDL_GetError());
-        return 0;
-    }
-
-    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
-    {
-        printf("SDL_image error: %s\n", IMG_GetError());
-        return 0;
-    }
-
-    if (TTF_Init() == -1)
-    {
-        printf("TTF error: %s\n", TTF_GetError());
-        return 0;
-    }
-
-    game->window = SDL_CreateWindow("Isla Survival",
-                                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                    WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
-    if (!game->window)
-        return 0;
-
-    game->renderer = SDL_CreateRenderer(game->window, -1,
-                                        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!game->renderer)
-        return 0;
-
-    game->font = TTF_OpenFont("8514oem.ttf", 24);
-    if (!game->font)
-    {
-        printf("Font error: %s\n", TTF_GetError());
-        return 0;
-    }
-
-    game->arbolTexture = IMG_LoadTexture(game->renderer, "arbol.png");
-    game->rocaTexture = IMG_LoadTexture(game->renderer, "roca.png");
-    game->amenazaTexture = IMG_LoadTexture(game->renderer, "animalmalo.png");
-    game->personajeTexture = IMG_LoadTexture(game->renderer, "personaje.png");
-    game->personajeRocaTexture = IMG_LoadTexture(game->renderer, "personajeroca.png");
-    game->personajeCompletoTexture = IMG_LoadTexture(game->renderer, "personajecompleto.png");
-    game->carneTexture = IMG_LoadTexture(game->renderer, "carne.png");
-
-    if (!game->arbolTexture || !game->rocaTexture || !game->amenazaTexture ||
-        !game->personajeTexture || !game->personajeRocaTexture ||
-        !game->personajeCompletoTexture || !game->carneTexture)
-    {
-        printf("Texture error: %s\n", IMG_GetError());
-        return 0;
-    }
-
-    return 1;
-}
-
-void handle_combat(SDL_Event *event)
-{
-    if (!animal_actual.activo)
-        return;
-
-    if (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_f)
-    {
-        int dist = distancia_manhattan(jugador.x, jugador.y, animal_actual.x, animal_actual.y);
-        if (dist <= 1)
-        {
-            float daño_base = jugador.tiene_espada ? 20.0f : 10.0f;
-
-            if (dist == 0)
-                daño_base *= 1.5f;
-
-            animal_actual.vida -= daño_base;
-
-            if (animal_actual.vida <= 0)
-            {
-                mapa[animal_actual.y][animal_actual.x] = 6;
-                animal_actual.activo = 0;
-                combate_activo = 0;
-                experiencia += 20;
-                return;
-            }
-        }
-    }
-
-    Uint32 tiempo_actual = SDL_GetTicks();
-    if (tiempo_actual - animal_actual.ultimo_ataque > 1000)
-    {
-        int dist = distancia_manhattan(jugador.x, jugador.y, animal_actual.x, animal_actual.y);
-        if (dist <= 1)
-        {
-            float daño_base = dist == 0 ? 1.5f : 1.0f;
-            aplicar_daño_jugador(daño_base);
-            animal_actual.ultimo_ataque = tiempo_actual;
-        }
-    }
-}
-
-void render_game(GameState *game)
-{
-    SDL_SetRenderDrawColor(game->renderer, 0, 0, 0, 255);
-    SDL_RenderClear(game->renderer);
-
-    for (int y = 0; y < MAP_SIZE; y++)
-    {
-        for (int x = 0; x < MAP_SIZE; x++)
-        {
-            SDL_Rect destRect = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
-
-            if (islaShape[y][x] == 0)
-            {
-                render_tile(game->renderer, x, y, colorAgua);
-            }
-            else if (mapa[y][x] == 1)
-            {
-                render_tile(game->renderer, x, y, colorArena);
-            }
-            else
-            {
-                render_tile(game->renderer, x, y, colorPasto);
-
-                switch (mapa[y][x])
-                {
-                case 3: // Roca
-                    SDL_RenderCopy(game->renderer, game->rocaTexture, NULL, &destRect);
-                    break;
-                case 4: // Árbol
-                    SDL_RenderCopy(game->renderer, game->arbolTexture, NULL, &destRect);
-                    break;
-                case 5: // Animal
-                    SDL_RenderCopy(game->renderer, game->amenazaTexture, NULL, &destRect);
-                    break;
-                case 6: // Carne
-                    SDL_RenderCopy(game->renderer, game->carneTexture, NULL, &destRect);
-                    break;
-                }
-            }
-        }
-    }
-
-    SDL_Rect playerRect = {jugador.x * TILE_SIZE, jugador.y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
-    SDL_Texture *currentTexture;
-
-    if (jugador.tiene_espada && jugador.tiene_armadura)
-    {
-        currentTexture = game->personajeCompletoTexture;
-    }
-    else if (jugador.tiene_espada)
-    {
-        currentTexture = game->personajeRocaTexture;
+        if (dx && forma_isla[animal->y][animal->x + dx])
+            animal->x += dx;
+        else if (dy && forma_isla[animal->y + dy][animal->x])
+            animal->y += dy;
     }
     else
     {
-        currentTexture = game->personajeTexture;
+        if (dy && forma_isla[animal->y + dy][animal->x])
+            animal->y += dy;
+        else if (dx && forma_isla[animal->y][animal->x + dx])
+            animal->x += dx;
     }
-
-    SDL_RenderCopy(game->renderer, currentTexture, NULL, &playerRect);
-
-    int barWidth = 100;
-    int barHeight = 20;
-    int startX = 650;
-    int startY = 30;
-    int textY = startY - 20;
-    int spacing = 50;
-
-    char statsText[32];
-    sprintf(statsText, "SALUD: %d/20", jugador.salud);
-    render_text(game, statsText, startX, textY);
-    SDL_Rect healthBar = {startX, startY, (jugador.salud * barWidth) / 20, barHeight};
-    SDL_SetRenderDrawColor(game->renderer, 255, 0, 0, 255);
-    SDL_RenderFillRect(game->renderer, &healthBar);
-
-    sprintf(statsText, "HAMBRE: %d/20", jugador.hambre);
-    render_text(game, statsText, startX, textY + spacing);
-    SDL_Rect hungerBar = {startX, startY + spacing, (jugador.hambre * barWidth) / 20, barHeight};
-    SDL_SetRenderDrawColor(game->renderer, 255, 255, 0, 255);
-    SDL_RenderFillRect(game->renderer, &hungerBar);
-
-    sprintf(statsText, "SED: %d/20", jugador.sed);
-    render_text(game, statsText, startX, textY + spacing * 2);
-    SDL_Rect thirstBar = {startX, startY + spacing * 2, (jugador.sed * barWidth) / 20, barHeight};
-    SDL_SetRenderDrawColor(game->renderer, 0, 0, 255, 255);
-    SDL_RenderFillRect(game->renderer, &thirstBar);
-
-    if (combate_activo && animal_actual.activo)
-    {
-        SDL_Rect animalHealthBar = {
-            animal_actual.x * TILE_SIZE,
-            animal_actual.y * TILE_SIZE - 10,
-            (animal_actual.vida * TILE_SIZE) / 100,
-            5};
-        SDL_SetRenderDrawColor(game->renderer, 255, 0, 0, 255);
-        SDL_RenderFillRect(game->renderer, &animalHealthBar);
-    }
-
-    if (jugador.salud <= 0)
-    {
-        render_game_over(game);
-    }
-
-    SDL_RenderPresent(game->renderer);
+    animal->ultimo_movimiento = SDL_GetTicks();
 }
 
-void handle_input(SDL_Event *event, int *running, int *restart)
+/* Gestiona el combate entre el jugador y los animales */
+void manejar_combate(EstadoJuego *estado)
 {
-    while (SDL_PollEvent(event))
-    {
-        if (event->type == SDL_QUIT)
-        {
-            *running = 0;
-        }
-        else if (event->type == SDL_KEYDOWN)
-        {
-            if (jugador.salud <= 0)
-            {
-                if (event->key.keysym.sym == SDLK_r)
-                {
-                    *restart = 1;
-                }
-                else if (event->key.keysym.sym == SDLK_q)
-                {
-                    *running = 0;
-                }
-                return;
-            }
+    if (!SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F])
+        return;
 
-            switch (event->key.keysym.sym)
+    static Uint32 ultimo_ataque = 0;
+    Uint32 tiempo_actual = SDL_GetTicks();
+    if (tiempo_actual - ultimo_ataque < 300)
+        return;
+
+    ultimo_ataque = tiempo_actual;
+    int golpe = 0;
+
+    // Buscar animales en el mapa cerca del jugador
+    for (int dy = -1; dy <= 1; dy++)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            int new_x = jugador.x + dx;
+            int new_y = jugador.y + dy;
+
+            // Verificar límites del mapa
+            if (new_x < 0 || new_x >= TAM_MAPA || new_y < 0 || new_y >= TAM_MAPA)
+                continue;
+
+            // Verificar si hay un animal estático en esta posición
+            if (mapa[new_y][new_x] == 5)
             {
-            case SDLK_w:
-                if (jugador.y > 0 && islaShape[jugador.y - 1][jugador.x])
-                    jugador.y--;
-                break;
-            case SDLK_s:
-                if (jugador.y < MAP_SIZE - 1 && islaShape[jugador.y + 1][jugador.x])
-                    jugador.y++;
-                break;
-            case SDLK_a:
-                if (jugador.x > 0 && islaShape[jugador.y][jugador.x - 1])
-                    jugador.x--;
-                break;
-            case SDLK_d:
-                if (jugador.x < MAP_SIZE - 1 && islaShape[jugador.y][jugador.x + 1])
-                    jugador.x++;
-                break;
-            case SDLK_q:
-                *running = 0;
-                break;
-            case SDLK_e:
-                if (mapa[jugador.y][jugador.x] == 1)
+                golpe = 1;
+
+                // Buscar un slot libre para activar el animal
+                for (int i = 0; i < MAX_ANIMALES; i++)
                 {
-                    jugador.sed = (jugador.sed + 5 > 20) ? 20 : jugador.sed + 5;
-                }
-                else
-                {
-                    switch (mapa[jugador.y][jugador.x])
+                    if (!animales[i].activo)
                     {
-                    case 0:
-                        jugador.sed = (jugador.sed + 5 > 20) ? 20 : jugador.sed + 5;
-                        break;
-                    case 3:
-                        if (!jugador.tiene_espada)
+                        // Activar el animal con vida completa y luego aplicar el daño
+                        animales[i].x = new_x;
+                        animales[i].y = new_y;
+                        animales[i].vida = VIDA_ANIMAL; // Vida completa inicial
+                        animales[i].activo = 1;
+                        animales[i].danio_causado = 0;
+                        animales[i].ultimo_ataque = SDL_GetTicks();
+                        animales[i].ultimo_movimiento = SDL_GetTicks();
+
+                        // Aplicar el daño después de activarlo
+                        animales[i].vida -= jugador.ataque_actual;
+                        mapa[new_y][new_x] = 2; // Limpiar la casilla del mapa
+
+                        if (animales[i].vida <= 0)
                         {
-                            jugador.tiene_espada = 1;
+                            mapa[new_y][new_x] = 6; // Convertir en carne
+                            animales[i].activo = 0;
+                            experiencia += 20;
                         }
-                        else if (!jugador.tiene_armadura)
-                        {
-                            jugador.tiene_armadura = 1;
-                        }
-                        mapa[jugador.y][jugador.x] = 2;
-                        break;
-                    case 4:
-                        jugador.inventario[0]++;
-                        experiencia += 10;
-                        mapa[jugador.y][jugador.x] = 2;
-                        break;
-                    case 6:
-                        jugador.hambre = (jugador.hambre + 5 > 20) ? 20 : jugador.hambre + 5;
-                        mapa[jugador.y][jugador.x] = 2;
                         break;
                     }
                 }
-                break;
-            case SDLK_f:
-                handle_combat(event);
-                break;
             }
+        }
+    }
 
-            if (animal_actual.activo)
+    // Verificar animales activos (los que persiguen)
+    for (int i = 0; i < MAX_ANIMALES; i++)
+    {
+        if (!animales[i].activo)
+            continue;
+
+        if (distancia_manhattan(jugador.x, animales[i].x, jugador.y, animales[i].y) <= 1)
+        {
+            golpe = 1;
+            animales[i].vida -= jugador.ataque_actual;
+
+            if (animales[i].vida <= 0)
             {
-                int dist = distancia_manhattan(jugador.x, jugador.y, animal_actual.x, animal_actual.y);
-                if (dist <= 1)
-                {
-                    combate_activo = 1;
-                }
+                mapa[animales[i].y][animales[i].x] = 6; // Convertir en carne
+                animales[i].activo = 0;
+                experiencia += 20;
             }
+        }
+    }
 
-            if (mapa[jugador.y][jugador.x] == 5 && !animal_actual.activo)
+    if (golpe && estado->sonido_lucha)
+        Mix_PlayChannel(-1, estado->sonido_lucha, 0);
+}
+
+/* Maneja los ataques de los animales al jugador */
+void manejar_ataques_animales(void)
+{
+    Uint32 tiempo_actual = SDL_GetTicks();
+    for (int i = 0; i < MAX_ANIMALES; i++)
+    {
+        if (!animales[i].activo)
+            continue;
+
+        // Asegurarnos de que el animal persiga al jugador
+        if (animales[i].vida > 0)
+        {
+            mover_animal_hacia_jugador(&animales[i]);
+
+            // Verificar si el animal está lo suficientemente cerca para atacar
+            if (tiempo_actual - animales[i].ultimo_ataque > 1000 &&
+                distancia_manhattan(jugador.x, animales[i].x, jugador.y, animales[i].y) <= 1)
             {
-                combate_activo = 1;
-                animal_actual.x = jugador.x;
-                animal_actual.y = jugador.y;
-                animal_actual.vida = 100;
-                animal_actual.activo = 1;
-                animal_actual.daño_causado = 0;
-                animal_actual.ultimo_ataque = SDL_GetTicks();
+                jugador.salud -= ATAQUE_ANIMAL;
+                animales[i].ultimo_ataque = tiempo_actual;
+                jugador.golpes_recibidos++;
             }
         }
     }
 }
 
-void cleanup(GameState *game)
+/* Actualiza el estado del jugador (salud, hambre, sed) */
+void actualizar_estado_jugador(void)
 {
-    SDL_DestroyTexture(game->arbolTexture);
-    SDL_DestroyTexture(game->rocaTexture);
-    SDL_DestroyTexture(game->amenazaTexture);
-    SDL_DestroyTexture(game->personajeTexture);
-    SDL_DestroyTexture(game->personajeRocaTexture);
-    SDL_DestroyTexture(game->personajeCompletoTexture);
-    SDL_DestroyTexture(game->carneTexture);
-    TTF_CloseFont(game->font);
-    SDL_DestroyRenderer(game->renderer);
-    SDL_DestroyWindow(game->window);
+    Uint32 tiempo_actual = SDL_GetTicks();
+    if (tiempo_actual - ultima_actualizacion_vida < 1000)
+        return;
+    ultima_actualizacion_vida = tiempo_actual;
+
+    int nivel_critico = jugador.tiene_armadura ? NIVEL_CRITICO_ARMADURA : NIVEL_CRITICO_BASE;
+    int nivel_recuperacion = jugador.tiene_armadura ? NIVEL_RECUPERACION_ARMADURA : NIVEL_RECUPERACION_BASE;
+
+    if (jugador.hambre > nivel_recuperacion && jugador.sed > nivel_recuperacion && jugador.salud < jugador.vida_maxima)
+    {
+        jugador.salud++;
+    }
+    if ((jugador.hambre <= nivel_critico || jugador.sed <= nivel_critico) && jugador.salud > 0)
+    {
+        jugador.salud--;
+    }
+}
+
+/* Renderiza texto en la pantalla */
+void renderizar_texto(EstadoJuego *estado, const char *texto, int x, int y)
+{
+    SDL_Surface *superficie = TTF_RenderText_Solid(estado->fuente, texto, color_blanco);
+    if (superficie)
+    {
+        SDL_Texture *textura = SDL_CreateTextureFromSurface(estado->renderizador, superficie);
+        if (textura)
+        {
+            SDL_Rect destRect = {x, y, superficie->w, superficie->h};
+            SDL_RenderCopy(estado->renderizador, textura, NULL, &destRect);
+            SDL_DestroyTexture(textura);
+        }
+        SDL_FreeSurface(superficie);
+    }
+}
+
+/* Renderiza una casilla en la pantalla */
+void renderizar_casilla(SDL_Renderer *renderizador, int x, int y, SDL_Color color)
+{
+    SDL_Rect casilla = {x * TAM_CASILLA, y * TAM_CASILLA, TAM_CASILLA, TAM_CASILLA};
+    SDL_SetRenderDrawColor(renderizador, color.r, color.g, color.b, color.a);
+    SDL_RenderFillRect(renderizador, &casilla);
+}
+
+/* Renderiza la pantalla de victoria */
+void renderizar_victoria(EstadoJuego *estado)
+{
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 128);
+    SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){0, 0, ANCHO_VENTANA, ALTO_VENTANA});
+    renderizar_texto(estado, "¡GANASTE!", ANCHO_VENTANA / 2 - 100, ALTO_VENTANA / 2 - 30);
+    renderizar_texto(estado, "¡Felicitaciones! Has recolectado todas las monedas", ANCHO_VENTANA / 2 - 250, ALTO_VENTANA / 2 + 10);
+    renderizar_texto(estado, "Presiona R para reiniciar o Q para salir", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 50);
+}
+
+/* Renderiza la pantalla de game over */
+void renderizar_game_over(EstadoJuego *estado)
+{
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 128);
+    SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){0, 0, ANCHO_VENTANA, ALTO_VENTANA});
+    renderizar_texto(estado, "¡GAME OVER!", ANCHO_VENTANA / 2 - 100, ALTO_VENTANA / 2 - 30);
+    renderizar_texto(estado, "Presiona R para reiniciar o Q para salir", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 10);
+}
+
+/* Renderiza el juego completo */
+void renderizar_juego(EstadoJuego *estado)
+{
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 255);
+    SDL_RenderClear(estado->renderizador);
+
+    // Renderizar mapa base
+    for (int y = 0; y < TAM_MAPA; y++)
+    {
+        for (int x = 0; x < TAM_MAPA; x++)
+        {
+            SDL_Rect destRect = {x * TAM_CASILLA, y * TAM_CASILLA, TAM_CASILLA, TAM_CASILLA};
+            renderizar_casilla(estado->renderizador, x, y, forma_isla[y][x] == 0 ? color_agua : mapa[y][x] == 1 ? color_arena
+                                                                                                                : color_pasto);
+
+            switch (mapa[y][x])
+            {
+            case 3:
+                SDL_RenderCopy(estado->renderizador, estado->textura_roca, NULL, &destRect);
+                break;
+            case 4:
+                SDL_RenderCopy(estado->renderizador, estado->textura_arbol, NULL, &destRect);
+                break;
+            case 5:
+                SDL_RenderCopy(estado->renderizador, estado->textura_amenaza, NULL, &destRect);
+                break;
+            case 6:
+                SDL_RenderCopy(estado->renderizador, estado->textura_carne, NULL, &destRect);
+                break;
+            }
+        }
+    }
+
+    // Renderizar moneda y animales
+    if (moneda_actual.activa)
+    {
+        SDL_RenderCopy(estado->renderizador, estado->textura_oro, NULL,
+                       &(SDL_Rect){moneda_actual.x * TAM_CASILLA, moneda_actual.y * TAM_CASILLA, TAM_CASILLA, TAM_CASILLA});
+    }
+
+    for (int i = 0; i < MAX_ANIMALES; i++)
+    {
+        if (animales[i].activo)
+        {
+            SDL_SetRenderDrawColor(estado->renderizador, 255, 0, 0, 255);
+            SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){
+                                                         animales[i].x * TAM_CASILLA,
+                                                         animales[i].y * TAM_CASILLA - 10,
+                                                         (animales[i].vida * TAM_CASILLA) / VIDA_ANIMAL,
+                                                         5});
+            SDL_RenderCopy(estado->renderizador, estado->textura_amenaza, NULL,
+                           &(SDL_Rect){animales[i].x * TAM_CASILLA, animales[i].y * TAM_CASILLA, TAM_CASILLA, TAM_CASILLA});
+        }
+    }
+
+    // Renderizar jugador
+    SDL_RenderCopy(estado->renderizador,
+                   jugador.tiene_espada && jugador.tiene_armadura ? estado->textura_personaje_completo : jugador.tiene_espada ? estado->textura_personaje_roca
+                                                                                                                              : estado->textura_personaje,
+                   NULL, &(SDL_Rect){jugador.x * TAM_CASILLA, jugador.y * TAM_CASILLA, TAM_CASILLA, TAM_CASILLA});
+
+    // Renderizar UI
+    char texto_stats[32];
+    int ancho_barra = 150, alto_barra = 20, inicio_x = ANCHO_VENTANA - 200, inicio_y = 30;
+    sprintf(texto_stats, "SALUD: %d/%d", jugador.salud, jugador.vida_maxima);
+    renderizar_texto(estado, texto_stats, inicio_x, inicio_y - 20);
+    SDL_SetRenderDrawColor(estado->renderizador, 255, 0, 0, 255);
+    SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){inicio_x, inicio_y, jugador.salud * ancho_barra / jugador.vida_maxima, alto_barra});
+
+    sprintf(texto_stats, "HAMBRE: %d/%d", jugador.hambre, jugador.vida_maxima);
+    renderizar_texto(estado, texto_stats, inicio_x, inicio_y + 30);
+    SDL_SetRenderDrawColor(estado->renderizador, 255, 255, 0, 255);
+    SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){inicio_x, inicio_y + 50, jugador.hambre * ancho_barra / jugador.vida_maxima, alto_barra});
+
+    sprintf(texto_stats, "SED: %d/%d", jugador.sed, jugador.vida_maxima);
+    renderizar_texto(estado, texto_stats, inicio_x, inicio_y + 80);
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 255, 255);
+    SDL_RenderFillRect(estado->renderizador, &(SDL_Rect){inicio_x, inicio_y + 100, jugador.sed * ancho_barra / jugador.vida_maxima, alto_barra});
+
+    sprintf(texto_stats, "MONEDAS: %d/%d", jugador.monedas_recogidas, MAX_MONEDAS);
+    renderizar_texto(estado, texto_stats, inicio_x, inicio_y + 130);
+
+    static bool sonido_game_over_reproducido = false;
+    if (jugador.salud <= 0)
+    {
+        Mix_HaltMusic();
+        if (!sonido_game_over_reproducido && estado->sonido_gameover)
+        {
+            Mix_PlayChannel(-1, estado->sonido_gameover, 0);
+            sonido_game_over_reproducido = true;
+        }
+        renderizar_game_over(estado);
+    }
+    else if (jugador.monedas_recogidas >= MAX_MONEDAS)
+    {
+        renderizar_victoria(estado);
+    }
+    else
+    {
+        sonido_game_over_reproducido = false;
+    }
+
+    SDL_RenderPresent(estado->renderizador);
+}
+
+/* Maneja la entrada del usuario */
+void manejar_entrada(SDL_Event *evento, int *ejecutando, int *reiniciar, EstadoJuego *estado)
+{
+    static Uint32 ultima_tecla = 0;
+    const Uint32 retardo_tecla = 200;
+
+    while (SDL_PollEvent(evento))
+    {
+        if (evento->type == SDL_QUIT)
+        {
+            *ejecutando = 0;
+            return;
+        }
+        if (evento->type != SDL_KEYDOWN)
+            continue;
+
+        if (jugador.salud <= 0 || jugador.monedas_recogidas >= MAX_MONEDAS)
+        {
+            if (evento->key.keysym.sym == SDLK_r)
+                *reiniciar = 1;
+            else if (evento->key.keysym.sym == SDLK_q)
+                *ejecutando = 0;
+            return;
+        }
+
+        Uint32 tiempo_actual = SDL_GetTicks();
+        if (tiempo_actual - ultima_tecla < retardo_tecla)
+            continue;
+        ultima_tecla = tiempo_actual;
+
+        int x_anterior = jugador.x, y_anterior = jugador.y;
+
+        switch (evento->key.keysym.sym)
+        {
+        case SDLK_w:
+            if (jugador.y > 0 && forma_isla[jugador.y - 1][jugador.x] && mapa[jugador.y - 1][jugador.x] != 4)
+                jugador.y--;
+            break;
+        case SDLK_s:
+            if (jugador.y < TAM_MAPA - 1 && forma_isla[jugador.y + 1][jugador.x] && mapa[jugador.y + 1][jugador.x] != 4)
+                jugador.y++;
+            break;
+        case SDLK_a:
+            if (jugador.x > 0 && forma_isla[jugador.y][jugador.x - 1] && mapa[jugador.y][jugador.x - 1] != 4)
+                jugador.x--;
+            break;
+        case SDLK_d:
+            if (jugador.x < TAM_MAPA - 1 && forma_isla[jugador.y][jugador.x + 1] && mapa[jugador.y][jugador.x + 1] != 4)
+                jugador.x++;
+            break;
+        case SDLK_q:
+            *ejecutando = 0;
+            break;
+        case SDLK_e:
+            if (mapa[jugador.y][jugador.x] <= 1)
+            {
+                jugador.sed = (jugador.sed + 5 > VIDA_BASE) ? VIDA_BASE : jugador.sed + 5;
+            }
+            else
+            {
+                switch (mapa[jugador.y][jugador.x])
+                {
+                case 3:
+                    if (!jugador.tiene_espada)
+                    {
+                        jugador.tiene_espada = 1;
+                        actualizar_stats_jugador();
+                    }
+                    else if (!jugador.tiene_armadura)
+                    {
+                        jugador.tiene_armadura = 1;
+                        actualizar_stats_jugador();
+                    }
+                    mapa[jugador.y][jugador.x] = 2;
+                    break;
+                case 4:
+                    jugador.inventario[0]++;
+                    experiencia += 10;
+                    mapa[jugador.y][jugador.x] = 2;
+                    break;
+                case 6:
+                    jugador.hambre = (jugador.hambre + 5 > VIDA_BASE) ? VIDA_BASE : jugador.hambre + 5;
+                    mapa[jugador.y][jugador.x] = 2;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    // Activar animales cercanos
+    for (int y = jugador.y - 5; y <= jugador.y + 5; y++)
+    {
+        for (int x = jugador.x - 5; x <= jugador.x + 5; x++)
+        {
+            if (y >= 0 && y < TAM_MAPA && x >= 0 && x < TAM_MAPA && mapa[y][x] == 5)
+            {
+                for (int i = 0; i < MAX_ANIMALES; i++)
+                {
+                    if (!animales[i].activo)
+                    {
+                        animales[i] = (Animal){x, y, VIDA_ANIMAL, 1, 0, SDL_GetTicks(), SDL_GetTicks()};
+                        mapa[y][x] = 2;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Reactivar animales cercanos
+    for (int i = 0; i < MAX_ANIMALES; i++)
+    {
+        if (animales[i].x > 0 && animales[i].y > 0 && !animales[i].activo &&
+            distancia_manhattan(jugador.x, animales[i].x, jugador.y, animales[i].y) <= 5)
+        {
+            animales[i].activo = 1;
+            animales[i].vida = VIDA_ANIMAL;
+            mapa[animales[i].y][animales[i].x] = 2;
+        }
+    }
+
+    // Verificar recolección de monedas
+    if (moneda_actual.activa && jugador.x == moneda_actual.x && jugador.y == moneda_actual.y)
+    {
+        jugador.monedas_recogidas++;
+        moneda_actual.activa = 0;
+        if (estado->sonido_moneda)
+            Mix_PlayChannel(-1, estado->sonido_moneda, 0);
+        if (jugador.monedas_recogidas < MAX_MONEDAS)
+            generar_moneda();
+    }
+}
+
+static int contar_casillas_validas(void)
+{
+    int count = 0;
+    for (int i = 0; i < TAM_MAPA; i++)
+    {
+        for (int j = 0; j < TAM_MAPA; j++)
+        {
+            if (forma_isla[i][j] && mapa[i][j] == 2)
+            {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+static void colocar_elemento(int tipo, int cantidad)
+{
+    while (cantidad > 0)
+    {
+        int y = rand() % TAM_MAPA;
+        int x = rand() % TAM_MAPA;
+
+        // Verificar si la posición es válida (es pasto y está dentro de la isla)
+        if (forma_isla[y][x] && mapa[y][x] == 2)
+        {
+            mapa[y][x] = tipo;
+            cantidad--;
+        }
+    }
+}
+
+/* Inicializa el mapa del juego */
+void inicializar_mapa(void)
+{
+    // Primero inicializamos todo el mapa base
+    for (int i = 0; i < TAM_MAPA; i++)
+    {
+        for (int j = 0; j < TAM_MAPA; j++)
+        {
+            if (!forma_isla[i][j])
+            {
+                mapa[i][j] = 0; // Agua
+                continue;
+            }
+            // Los bordes siempre son arena
+            int es_borde = (i > 0 && !forma_isla[i - 1][j]) ||
+                           (i < TAM_MAPA - 1 && !forma_isla[i + 1][j]) ||
+                           (j > 0 && !forma_isla[i][j - 1]) ||
+                           (j < TAM_MAPA - 1 && !forma_isla[i][j + 1]);
+
+            mapa[i][j] = es_borde ? 1 : 2; // 1 = arena, 2 = pasto
+        }
+    }
+
+    // Colocar elementos específicos
+    colocar_elemento(3, 10); // 10 rocas
+    colocar_elemento(5, 30); // 30 animales
+    colocar_elemento(4, 40); // 40 árboles
+
+    // Activar animales iniciales
+    for (int i = 0; i < TAM_MAPA; i++)
+    {
+        for (int j = 0; j < TAM_MAPA; j++)
+        {
+            if (mapa[i][j] == 5)
+            {
+                for (int k = 0; k < MAX_ANIMALES; k++)
+                {
+                    if (!animales[k].activo)
+                    {
+                        animales[k] = (Animal){j, i, VIDA_ANIMAL, 1, 0, SDL_GetTicks(), SDL_GetTicks()};
+                        mapa[i][j] = 2;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* Reinicia el estado del jugador */
+void reiniciar_jugador(Jugador *j)
+{
+    j->x = j->y = TAM_MAPA / 2;
+    j->vida_maxima = VIDA_BASE;
+    j->ataque_actual = ATAQUE_BASE;
+    j->salud = j->hambre = j->sed = VIDA_BASE;
+    j->energia = 100;
+    j->tiene_espada = j->tiene_armadura = j->golpes_recibidos = j->monedas_recogidas = 0;
+    experiencia = 0;
+    memset(j->inventario, 0, sizeof(j->inventario));
+    memset(animales, 0, sizeof(Animal) * MAX_ANIMALES);
+    moneda_actual = (Moneda){0};
+    generar_moneda();
+}
+
+/* Inicializa el juego */
+int inicializar_juego(EstadoJuego *estado)
+{
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0 ||
+        !(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) ||
+        TTF_Init() == -1 ||
+        Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+        return 0;
+
+    estado->ventana = SDL_CreateWindow("Isla Survival", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                       ANCHO_VENTANA, ALTO_VENTANA, SDL_WINDOW_SHOWN);
+    if (!estado->ventana)
+        return 0;
+
+    estado->renderizador = SDL_CreateRenderer(estado->ventana, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!estado->renderizador)
+        return 0;
+
+    estado->fuente = TTF_OpenFont("8514oem.ttf", 24);
+    if (!estado->fuente)
+        return 0;
+
+    // Cargar texturas
+    estado->textura_arbol = IMG_LoadTexture(estado->renderizador, "arbol.png");
+    estado->textura_roca = IMG_LoadTexture(estado->renderizador, "roca.png");
+    estado->textura_amenaza = IMG_LoadTexture(estado->renderizador, "animalmalo.png");
+    estado->textura_personaje = IMG_LoadTexture(estado->renderizador, "personaje.png");
+    estado->textura_personaje_roca = IMG_LoadTexture(estado->renderizador, "personajeroca.png");
+    estado->textura_personaje_completo = IMG_LoadTexture(estado->renderizador, "personajecompleto.png");
+    estado->textura_carne = IMG_LoadTexture(estado->renderizador, "carne.png");
+    estado->textura_oro = IMG_LoadTexture(estado->renderizador, "oro.png");
+
+    // Cargar música y efectos
+    estado->musica = Mix_LoadMUS("musica.mp3");
+    estado->sonido_lucha = Mix_LoadWAV("lucha.mp3");
+    estado->sonido_gameover = Mix_LoadWAV("gameover.mp3");
+    estado->sonido_moneda = Mix_LoadWAV("moneda.mp3");
+
+    if (estado->musica)
+        Mix_PlayMusic(estado->musica, -1);
+
+    return estado->textura_arbol && estado->textura_roca && estado->textura_amenaza &&
+           estado->textura_personaje && estado->textura_personaje_roca &&
+           estado->textura_personaje_completo && estado->textura_carne && estado->textura_oro &&
+           estado->sonido_lucha && estado->sonido_gameover && estado->sonido_moneda;
+}
+
+/* Limpia los recursos del juego */
+void limpiar_juego(EstadoJuego *estado)
+{
+    SDL_DestroyTexture(estado->textura_arbol);
+    SDL_DestroyTexture(estado->textura_roca);
+    SDL_DestroyTexture(estado->textura_amenaza);
+    SDL_DestroyTexture(estado->textura_personaje);
+    SDL_DestroyTexture(estado->textura_personaje_roca);
+    SDL_DestroyTexture(estado->textura_personaje_completo);
+    SDL_DestroyTexture(estado->textura_carne);
+    SDL_DestroyTexture(estado->textura_oro);
+    Mix_FreeMusic(estado->musica);
+    Mix_FreeChunk(estado->sonido_lucha);
+    Mix_FreeChunk(estado->sonido_gameover);
+    Mix_FreeChunk(estado->sonido_moneda);
+    TTF_CloseFont(estado->fuente);
+    SDL_DestroyRenderer(estado->renderizador);
+    SDL_DestroyWindow(estado->ventana);
+    Mix_CloseAudio();
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
@@ -599,39 +745,38 @@ void cleanup(GameState *game)
 int main(int argc, char *argv[])
 {
     srand(time(NULL));
-    GameState game;
-    SDL_Event event;
-    int running = 1;
+    EstadoJuego estado;
+    SDL_Event evento;
+    int ejecutando = 1;
 
-    if (!init_game(&game))
-    {
+    if (!inicializar_juego(&estado))
         return 1;
-    }
 
-    while (running)
+    while (ejecutando)
     {
-        int restart = 0;
-        init_mapa();
-        reiniciar_juego(&jugador);
+        int reiniciar = 0;
+        inicializar_mapa();
+        reiniciar_jugador(&jugador);
 
-        while (running && !restart)
+        while (ejecutando && !reiniciar)
         {
-            handle_input(&event, &running, &restart);
+            manejar_entrada(&evento, &ejecutando, &reiniciar, &estado);
             actualizar_estado_jugador();
-            render_game(&game);
+            manejar_combate(&estado);
+            manejar_ataques_animales();
+            renderizar_juego(&estado);
             SDL_Delay(16);
 
-            if (jugador.salud > 0)
+            if (jugador.salud > 0 && rand() % (100 * VEL_JUEGO) == 0)
             {
-                if (rand() % (100 * GAME_SPEED) == 0)
-                {
-                    jugador.sed = (jugador.sed > 0) ? jugador.sed - 1 : 0;
-                    jugador.hambre = (jugador.hambre > 0) ? jugador.hambre - 1 : 0;
-                }
+                if (jugador.sed > 0)
+                    jugador.sed--;
+                if (jugador.hambre > 0)
+                    jugador.hambre--;
             }
         }
     }
 
-    cleanup(&game);
+    limpiar_juego(&estado);
     return 0;
 }
