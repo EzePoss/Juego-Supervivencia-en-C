@@ -174,6 +174,8 @@ Jugador jugador;
 Animal animales[MAX_ANIMALES];
 Recurso recursos[MAX_RECURSOS];
 int mapa[TAM_MAPA][TAM_MAPA];
+int recursos_recolectados[5] = {0, 0, 0, 0, 0};
+
 SDL_Color color_agua = {64, 224, 208, 255};
 SDL_Color color_arena = {238, 214, 175, 255};
 SDL_Color color_pasto = {34, 139, 34, 255};
@@ -231,6 +233,8 @@ void reiniciar_partida(bool nuevo_juego, EstadoJuego *estado);
 void inicializar_jugador(void);
 void inicializar_mapa(void);
 void mostrar_pantalla_victoria(EstadoJuego *estado, int *ejecutando);
+void guardar_recursos_recolectados(void);
+void reiniciar_contador_recursos(void);
 // Implementación de las funciones principales
 
 void actualizar_clima(EstadoJuego *estado)
@@ -1009,6 +1013,7 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
     {
         if (evento->type == SDL_QUIT)
         {
+            guardar_recursos_recolectados();
             *ejecutando = 0;
             return;
         }
@@ -1043,40 +1048,74 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
                 break;
 
             case SDLK_e: // Recolectar recursos
+                // Primero revisamos si hay frutas o carne para recolectar
+                bool hay_comida = false;
                 for (int i = 0; i < MAX_RECURSOS; i++)
                 {
                     if (recursos[i].activo && recursos[i].x == jugador.x && recursos[i].y == jugador.y)
                     {
-                        if (recursos[i].tipo == 2) // Fruta
-                        {
-                            jugador.inventario[3]++;
-                            jugador.inventario[4]++;
+                        if (recursos[i].tipo == 2 || recursos[i].tipo == 4)
+                        { // Si es fruta o carne
+                            hay_comida = true;
+                            if (recursos[i].tipo == 2)
+                            { // Fruta
+                                jugador.inventario[3]++;
+                                jugador.inventario[4]++;
+                                recursos_recolectados[2]++; // Contador de frutas
+                            }
+                            else
+                            { // Carne
+                                jugador.inventario[2]++;
+                                recursos_recolectados[3]++; // Contador de carne
+                            }
+                            recursos[i].activo = 0;
+                            break;
                         }
-                        else if (recursos[i].tipo == 3) // Semilla
-                        {
-                            jugador.inventario[4]++;
-                        }
-                        else if (recursos[i].tipo == 4) // Carne
-                        {
-                            jugador.inventario[2]++; // Incrementar contador de carne
-                        }
-                        recursos[i].activo = 0;
-                        jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
-                        break;
                     }
                 }
 
-                if (mapa[jugador.y][jugador.x] == 4) // Árbol
+                // Si no hay comida para recolectar, verificar energía para otros recursos
+                if (!hay_comida)
                 {
-                    jugador.inventario[0] += UNIDADES_POR_ARBOL;
-                    mapa[jugador.y][jugador.x] = 2;
-                    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
-                }
-                else if (mapa[jugador.y][jugador.x] == 3) // Roca
-                {
-                    jugador.inventario[1] += UNIDADES_POR_ROCA;
-                    mapa[jugador.y][jugador.x] = 2;
-                    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
+                    if (jugador.energia >= COSTO_ENERGIA_RECOLECCION)
+                    {
+                        // Recolectar otros recursos (semillas, árboles, rocas)
+                        for (int i = 0; i < MAX_RECURSOS; i++)
+                        {
+                            if (recursos[i].activo && recursos[i].x == jugador.x && recursos[i].y == jugador.y)
+                            {
+                                if (recursos[i].tipo == 3)
+                                { // Semilla
+                                    jugador.inventario[4]++;
+                                    recursos_recolectados[4]++; // Contador de semillas
+                                    recursos[i].activo = 0;
+                                    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Recolectar árboles y rocas
+                        if (mapa[jugador.y][jugador.x] == 4)
+                        { // Árbol
+                            jugador.inventario[0] += UNIDADES_POR_ARBOL;
+                            recursos_recolectados[0] += UNIDADES_POR_ARBOL; // Contador de madera
+                            mapa[jugador.y][jugador.x] = 2;
+                            jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
+                        }
+                        else if (mapa[jugador.y][jugador.x] == 3)
+                        { // Roca
+                            jugador.inventario[1] += UNIDADES_POR_ROCA;
+                            recursos_recolectados[1] += UNIDADES_POR_ROCA; // Contador de roca
+                            mapa[jugador.y][jugador.x] = 2;
+                            jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
+                        }
+                    }
+                    else
+                    {
+                        printf("No tienes suficiente energia para recolectar este recurso.\n");
+                        printf("Solo puedes recolectar frutas y carne cuando tienes poca energia.\n");
+                    }
                 }
                 break;
 
@@ -1154,6 +1193,7 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
                     jugador.x == jugador.construcciones[i].x &&
                     jugador.y == jugador.construcciones[i].y)
                 {
+                    guardar_recursos_recolectados();
                     mostrar_pantalla_victoria(estado, ejecutando);
                     return;
                 }
@@ -1378,7 +1418,10 @@ void manejar_construccion(EstadoJuego *estado, int tipo_construccion)
 void generar_recursos(void)
 {
     static Uint32 ultimo_tiempo_generacion = 0;
+    static int veces_regeneradas = 0; // Contador para frutas y semillas
     Uint32 tiempo_actual = SDL_GetTicks();
+    int frutas_generadas = 0;   // Declaración añadida
+    int semillas_generadas = 0; // Declaración añadida
 
     // Verificar si ha pasado suficiente tiempo desde la última generación
     Uint32 tiempo_minimo = MIN(TIEMPO_REAPARICION_ARBOLES,
@@ -1386,7 +1429,7 @@ void generar_recursos(void)
 
     if (tiempo_actual - ultimo_tiempo_generacion < tiempo_minimo)
     {
-        return; // Si no ha pasado suficiente tiempo, salir de la función
+        return;
     }
 
     // Contar recursos actuales
@@ -1414,95 +1457,133 @@ void generar_recursos(void)
         }
     }
 
-    // Generar árboles si es necesario
-    if (arboles < NUM_ARBOLES_INICIAL &&
+    // Generar árboles si es necesario y si estamos al amanecer
+    if (arboles < 20 &&
         tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_ARBOLES)
     {
-        int x, y;
-        do
+        int arboles_faltantes = 20 - arboles;
+        for (int i = 0; i < arboles_faltantes; i++)
         {
-            x = rand() % TAM_MAPA;
-            y = rand() % TAM_MAPA;
-        } while (!forma_isla[y][x] || mapa[y][x] != 2);
-        mapa[y][x] = 4;
-    }
+            int x, y;
+            int intentos = 0;
+            const int MAX_INTENTOS = 100;
 
-    // Generar rocas si es necesario
-    if (rocas < NUM_ROCAS_INICIAL &&
-        tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_ROCAS)
-    {
-        int x, y;
-        do
-        {
-            x = rand() % TAM_MAPA;
-            y = rand() % TAM_MAPA;
-        } while (!forma_isla[y][x] || mapa[y][x] != 2);
-        mapa[y][x] = 3;
-    }
-
-    // Generar frutas si es necesario
-    if (frutas < 5 && tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_FRUTAS)
-    {
-        int frutas_generadas = 0;
-        for (int i = 0; i < MAX_RECURSOS && frutas_generadas < (5 - frutas); i++)
-        {
-            if (!recursos[i].activo)
+            do
             {
-                int x, y;
-                int intentos = 0;
-                const int MAX_INTENTOS = 100; // Evitar bucle infinito
+                x = rand() % TAM_MAPA;
+                y = rand() % TAM_MAPA;
+                intentos++;
+                if (intentos >= MAX_INTENTOS)
+                    break;
+            } while (!forma_isla[y][x] || mapa[y][x] != 2);
 
-                do
-                {
-                    x = rand() % TAM_MAPA;
-                    y = rand() % TAM_MAPA;
-                    intentos++;
-                    if (intentos >= MAX_INTENTOS)
-                        break;
-                } while (!forma_isla[y][x] || mapa[y][x] != 2);
-
-                if (intentos < MAX_INTENTOS)
-                { // Si encontramos una posición válida
-                    recursos[i].x = x;
-                    recursos[i].y = y;
-                    recursos[i].tipo = 2; // Fruta
-                    recursos[i].activo = 1;
-                    frutas_generadas++;
-                }
+            if (intentos < MAX_INTENTOS)
+            {
+                mapa[y][x] = 4;
+                arboles++;
             }
         }
     }
 
-    // Generar semillas si es necesario
-    if (semillas < 5)
+    // Generar rocas si es necesario y si estamos al amanecer
+    if (rocas < 10 &&
+        tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_ROCAS)
     {
-        int semillas_generadas = 0;
-        for (int i = 0; i < MAX_RECURSOS && semillas_generadas < (5 - semillas); i++)
+        int rocas_faltantes = 10 - rocas;
+        for (int i = 0; i < rocas_faltantes; i++)
         {
-            if (!recursos[i].activo)
+            int x, y;
+            int intentos = 0;
+            const int MAX_INTENTOS = 100;
+
+            do
             {
-                int x, y;
-                int intentos = 0;
-                const int MAX_INTENTOS = 100; // Evitar bucle infinito
+                x = rand() % TAM_MAPA;
+                y = rand() % TAM_MAPA;
+                intentos++;
+                if (intentos >= MAX_INTENTOS)
+                    break;
+            } while (!forma_isla[y][x] || mapa[y][x] != 2);
 
-                do
+            if (intentos < MAX_INTENTOS)
+            {
+                mapa[y][x] = 3;
+                rocas++;
+            }
+        }
+    }
+
+    // Generar frutas y semillas solo las primeras 2 veces
+    if (veces_regeneradas < 2 &&
+        tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_FRUTAS)
+    {
+        // Generar frutas si hay menos de 5
+        if (frutas < 5)
+        {
+            for (int i = 0; i < MAX_RECURSOS && frutas_generadas < (5 - frutas); i++)
+            {
+                if (!recursos[i].activo)
                 {
-                    x = rand() % TAM_MAPA;
-                    y = rand() % TAM_MAPA;
-                    intentos++;
-                    if (intentos >= MAX_INTENTOS)
-                        break;
-                } while (!forma_isla[y][x] || mapa[y][x] != 2);
+                    int x, y;
+                    int intentos = 0;
+                    const int MAX_INTENTOS = 100;
 
-                if (intentos < MAX_INTENTOS)
-                { // Si encontramos una posición válida
-                    recursos[i].x = x;
-                    recursos[i].y = y;
-                    recursos[i].tipo = 3; // Semilla
-                    recursos[i].activo = 1;
-                    semillas_generadas++;
+                    do
+                    {
+                        x = rand() % TAM_MAPA;
+                        y = rand() % TAM_MAPA;
+                        intentos++;
+                        if (intentos >= MAX_INTENTOS)
+                            break;
+                    } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                    if (intentos < MAX_INTENTOS)
+                    {
+                        recursos[i].x = x;
+                        recursos[i].y = y;
+                        recursos[i].tipo = 2; // Fruta
+                        recursos[i].activo = 1;
+                        frutas_generadas++;
+                    }
                 }
             }
+        }
+
+        // Generar semillas si hay menos de 5
+        if (semillas < 5)
+        {
+            for (int i = 0; i < MAX_RECURSOS && semillas_generadas < (5 - semillas); i++)
+            {
+                if (!recursos[i].activo)
+                {
+                    int x, y;
+                    int intentos = 0;
+                    const int MAX_INTENTOS = 100;
+
+                    do
+                    {
+                        x = rand() % TAM_MAPA;
+                        y = rand() % TAM_MAPA;
+                        intentos++;
+                        if (intentos >= MAX_INTENTOS)
+                            break;
+                    } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                    if (intentos < MAX_INTENTOS)
+                    {
+                        recursos[i].x = x;
+                        recursos[i].y = y;
+                        recursos[i].tipo = 3; // Semilla
+                        recursos[i].activo = 1;
+                        semillas_generadas++;
+                    }
+                }
+            }
+        }
+
+        if (frutas_generadas > 0 || semillas_generadas > 0)
+        {
+            veces_regeneradas++;
         }
     }
 
@@ -1572,7 +1653,7 @@ void actualizar_stats_jugador(EstadoJuego *estado)
         {
             if (jugador.energia >= 20 && jugador.sed > 20 && jugador.hambre > 20)
             {
-                jugador.salud = MIN(jugador.vida_maxima, jugador.salud + 5);
+                jugador.salud = MIN(jugador.vida_maxima, jugador.salud + 10); // Cambiado de 5 a 10
                 jugador.energia = MIN(100, jugador.energia + 10);
             }
             ultimo_tiempo_recuperacion = tiempo_actual;
@@ -1614,11 +1695,11 @@ void actualizar_stats_jugador(EstadoJuego *estado)
             ultimo_tiempo_daño_lluvia = tiempo_actual;
         }
 
-        // Consumo de energía durante la noche
+        // Consumo de energía durante la noche (modificado)
         if (!estado->es_de_dia &&
-            tiempo_actual - ultimo_tiempo_energia_noche >= 3000)
+            tiempo_actual - ultimo_tiempo_energia_noche >= 3000) // Cambiado a 3000 (3 segundos)
         {
-            jugador.energia = MAX(0, jugador.energia - 4);
+            jugador.energia = MAX(0, jugador.energia - 4); // Se mantiene el daño de 4
             ultimo_tiempo_energia_noche = tiempo_actual;
         }
     }
@@ -1628,6 +1709,35 @@ void actualizar_stats_jugador(EstadoJuego *estado)
     jugador.hambre = MIN(100, jugador.hambre);
     jugador.energia = MIN(100, jugador.energia);
     jugador.salud = MIN(jugador.vida_maxima, jugador.salud);
+}
+
+// Agregar esta nueva función
+void guardar_recursos_recolectados(void)
+{
+    FILE *archivo = fopen("recursos_recolectados.txt", "w");
+    if (archivo == NULL)
+    {
+        printf("Error al crear el archivo de recursos\n");
+        return;
+    }
+
+    fprintf(archivo, "RECURSOS RECOLECTADOS EN TU ULTIMO JUEGO:\n");
+    fprintf(archivo, "%d de madera\n", recursos_recolectados[0]);
+    fprintf(archivo, "%d de roca\n", recursos_recolectados[1]);
+    fprintf(archivo, "%d frutas\n", recursos_recolectados[2]);
+    fprintf(archivo, "%d carnes\n", recursos_recolectados[3]);
+    fprintf(archivo, "%d semillas\n", recursos_recolectados[4]);
+
+    fclose(archivo);
+}
+
+// Agregar esta función para reiniciar el contador
+void reiniciar_contador_recursos(void)
+{
+    for (int i = 0; i < 5; i++)
+    {
+        recursos_recolectados[i] = 0;
+    }
 }
 int inicializar_juego(EstadoJuego *estado)
 {
@@ -2271,14 +2381,17 @@ int main(int argc, char *argv[])
                         switch (evento.key.keysym.sym)
                         {
                         case SDLK_RETURN:
-                            reiniciar_partida(false, &estado); // Volver a intentar
+                            reiniciar_partida(false, &estado); // Volver a intentar sin reiniciar contadores
                             esperando_input = false;
                             break;
                         case SDLK_SPACE:
+                            guardar_recursos_recolectados();  // Guardar recursos antes de reiniciar
+                            reiniciar_contador_recursos();    // Reiniciar contadores
                             reiniciar_partida(true, &estado); // Nueva partida
                             esperando_input = false;
                             break;
                         case SDLK_ESCAPE:
+                            guardar_recursos_recolectados();
                             esperando_input = false;
                             ejecutando = 0;
                             break;
