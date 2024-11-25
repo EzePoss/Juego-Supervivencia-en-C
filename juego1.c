@@ -1,3 +1,4 @@
+// Librerías estándar
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -8,53 +9,118 @@
 #include <math.h>
 #include <stdbool.h>
 
-// Constantes del juego
-#define ANCHO_VENTANA 1200
+// Constantes generales del juego
+#define ANCHO_VENTANA 1250
 #define ALTO_VENTANA 750
 #define TAM_CASILLA 28
 #define TAM_MAPA 27
 #define VEL_JUEGO 2
-#define MAX_ANIMALES 5
+#define MAX_ANIMALES 10
 #define MAX_RECURSOS 15
 #define RETARDO_MOV_ANIMAL 500
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 // Constantes de tiempo
-#define DURACION_DIA 60000 // 1 minuto en milisegundos
-#define CICLO_CLIMA 30000  // 30 segundos
+#define SEGUNDO_REAL_A_JUEGO 12  // 1 segundo real = 12 segundos de juego
+#define DURACION_DIA 120000      // 2 minutos en milisegundos
+#define DURACION_MITAD_DIA 60000 // 1 minuto en milisegundos
+#define CICLO_CLIMA 30000        // 30 segundos
+#define HORA_INICIO 7
 
 // Tipos de clima
 #define CLIMA_SOLEADO 0
 #define CLIMA_LLUVIOSO 1
 #define CLIMA_TORMENTA 2
 
-// Constantes de jugador y combate
+// Constantes de recursos
+#define NUM_ARBOLES_INICIAL 10
+#define NUM_ROCAS_INICIAL 5
+#define NUM_ARBUSTOS_INICIAL 5
+#define UNIDADES_POR_ARBOL 5
+#define UNIDADES_POR_ROCA 3
+#define UNIDADES_POR_ARBUSTO 2
+#define TIEMPO_REAPARICION_ARBOLES 50000 // 50 segundos reales
+#define TIEMPO_REAPARICION_ROCAS 75000   // 75 segundos reales
+#define TIEMPO_REAPARICION_FRUTAS 30000  // 30 segundos reales
+
+// Constantes de amenazas
+#define NUM_ANIMALES_INICIAL 10
+#define TIEMPO_REAPARICION_ANIMAL 30000 // 30 segundos reales
+#define PROB_ATAQUE_DIA 25              // 25% por minuto
+#define PROB_ATAQUE_NOCHE 50            // 50% por minuto
+#define DAÑO_ANIMAL 20
+#define RADIO_DETECCION_ANIMAL 5
+#define VELOCIDAD_ANIMAL 1
+
+// Constantes del jugador
 #define VIDA_BASE 100
 #define VIDA_ARMADURA 150
+#define MAX_SALUD 100
+#define MAX_ENERGIA 100
+#define MAX_HAMBRE 100
+#define MAX_SED 100
 #define ATAQUE_BASE 10
 #define ATAQUE_ESPADA 20
 #define ATAQUE_COMPLETO 30
 #define VIDA_ANIMAL 50
-#define ATAQUE_ANIMAL 8
+#define DAÑO_ESPADA 15
+
+// Constantes de estados críticos
 #define NIVEL_CRITICO_BASE 20
 #define NIVEL_CRITICO_ARMADURA 30
 #define NIVEL_RECUPERACION_BASE 80
 #define NIVEL_RECUPERACION_ARMADURA 90
-#define RADIO_VISION_ANTORCHA 3
-#define RADIO_DETECCION_ANIMAL 5
-#define DURACION_ANTORCHA (DURACION_DIA / 4) // La antorcha dura la mitad de la noche
-#define COSTO_ANTORCHA 3
-#define COSTO_ESPADA_MADERA 5
-#define COSTO_ESPADA_PIEDRA 3
-#define COSTO_ARMADURA_MADERA 8
-#define COSTO_ARMADURA_PIEDRA 5
-#define DAÑO_ESPADA 15
-#define VELOCIDAD_ANIMAL 1
-// Tipos de construcciones
+#define DAÑO_CRITICO 5
+#define TIEMPO_DAÑO_CRITICO 30000 // 30 segundos reales
+
+// Constantes de recuperación
+#define RECUPERACION_FRUTA_SALUD 10
+#define RECUPERACION_CARNE_SALUD 20
+#define RECUPERACION_REFUGIO 5
+#define TIEMPO_RECUPERACION_REFUGIO 5000
+#define RECUPERACION_ENERGIA_FRUTA 10
+#define RECUPERACION_ENERGIA_REFUGIO 10
+#define RECUPERACION_HAMBRE_FRUTA 15
+#define RECUPERACION_CARNE_HAMBRE 30
+#define RECUPERACION_SED_RIO 30
+
+// Constantes de costos
+#define COSTO_ENERGIA_RECOLECCION 5
+#define COSTO_ENERGIA_CONSTRUCCION 15
+#define COSTO_ENERGIA_MOVIMIENTO 0
+#define TIEMPO_PERDIDA_ENERGIA_MOVIMIENTO 20000
+#define PERDIDA_HAMBRE 5
+#define TIEMPO_PERDIDA_HAMBRE 10000
+#define PERDIDA_SED 5
+#define TIEMPO_PERDIDA_SED 10000
+
+// Constantes de construcción
 #define TIPO_REFUGIO 1
 #define TIPO_FOGATA 2
 #define TIPO_CULTIVO 3
+#define TIPO_EMBARCACION 4
 
+#define MADERA_REFUGIO 10
+#define TIEMPO_CONSTRUCCION_REFUGIO 10000
+#define MADERA_FOGATA 5
+#define ROCA_FOGATA 1
+#define TIEMPO_CONSTRUCCION_FOGATA 5000
+
+// Constantes de crafteo
+#define COSTO_ESPADA_MADERA 5
+#define COSTO_ESPADA_PIEDRA 10
+#define COSTO_ARMADURA_MADERA 8
+#define COSTO_ARMADURA_PIEDRA 15
+#define TIEMPO_CONSTRUCCION_ESPADA 10000
+#define TIEMPO_CONSTRUCCION_ARMADURA 15000
+
+// Constantes de embarcación
+#define MADERA_EMBARCACION 50
+#define ROCA_EMBARCACION 20
+#define TIEMPO_CONSTRUCCION_EMBARCACION 30000
+#define MIN_STATS_VICTORIA 50
+#define CLIMA_LLUVIA 1 // O el número que uses para representar la lluvia
 typedef struct
 {
     int x, y;
@@ -67,13 +133,12 @@ typedef struct
 // Modificar la estructura del jugador
 typedef struct
 {
-    int x, y, salud, hambre, sed, energia, temperatura;
+    int x, y, salud, hambre, sed, energia;
     int inventario[10];
-    int tiene_espada, tiene_armadura, tiene_refugio, tiene_antorcha;
+    int tiene_espada, tiene_armadura, tiene_refugio;
     int vida_maxima, ataque_actual;
     int nivel_crafteo;
     Construccion construcciones[5];
-    Uint32 tiempo_inicio_antorcha;
 } Jugador;
 
 typedef struct
@@ -94,11 +159,11 @@ typedef struct
     SDL_Renderer *renderizador;
     SDL_Texture *textura_arbol, *textura_roca, *textura_animal_1, *textura_animal_2,
         *textura_personaje, *textura_personaje_equipado, *textura_personaje_espada,
-        *textura_personaje_antorcha, *textura_refugio, *textura_fogata, *textura_cultivo,
-        *textura_fruta, *textura_semilla;
+        *textura_refugio, *textura_fogata, *textura_cultivo,
+        *textura_fruta, *textura_semilla, *textura_barco, *textura_carne;
     TTF_Font *fuente;
     Mix_Music *musica_dia, *musica_noche;
-    Mix_Chunk *sonido_lucha, *sonido_construccion, *sonido_clima;
+    Mix_Chunk *sonido_lucha, *sonido_construccion, *sonido_clima, *sonido_fuego, *sonido_victoria, *sonido_gameover;
     int clima_actual;
     bool es_de_dia;
     Uint32 tiempo_inicio_dia;
@@ -109,7 +174,6 @@ Jugador jugador;
 Animal animales[MAX_ANIMALES];
 Recurso recursos[MAX_RECURSOS];
 int mapa[TAM_MAPA][TAM_MAPA];
-int temperatura_ambiente = 20;
 SDL_Color color_agua = {64, 224, 208, 255};
 SDL_Color color_arena = {238, 214, 175, 255};
 SDL_Color color_pasto = {34, 139, 34, 255};
@@ -148,8 +212,7 @@ const int forma_isla[27][27] = {
 // Prototipos de funciones
 void actualizar_clima(EstadoJuego *estado);
 void actualizar_ciclo_dia_noche(EstadoJuego *estado);
-void actualizar_temperatura_jugador(void);
-void manejar_construccion(int tipo_construccion);
+void manejar_construccion(EstadoJuego *estado, int tipo_construccion);
 void generar_recursos(void);
 void generar_amenazas(void);
 void renderizar_juego(EstadoJuego *estado);
@@ -160,16 +223,20 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado);
 int inicializar_juego(EstadoJuego *estado);
 void limpiar_juego(EstadoJuego *estado);
 void renderizar_texto(EstadoJuego *estado, const char *texto, int x, int y, SDL_Color color);
-void manejar_antorcha(EstadoJuego *estado);
 void manejar_combate(Animal *animal, EstadoJuego *estado);
 void actualizar_animales(EstadoJuego *estado);
 void crear_espada(void);
 void crear_armadura(void);
+void reiniciar_partida(bool nuevo_juego, EstadoJuego *estado);
+void inicializar_jugador(void);
+void inicializar_mapa(void);
+void mostrar_pantalla_victoria(EstadoJuego *estado, int *ejecutando);
 // Implementación de las funciones principales
 
 void actualizar_clima(EstadoJuego *estado)
 {
     static int clima_anterior = -1;
+    static int canal_lluvia = -1;
     Uint32 tiempo_actual = SDL_GetTicks();
 
     if (tiempo_actual - estado->tiempo_inicio_dia > CICLO_CLIMA)
@@ -182,37 +249,78 @@ void actualizar_clima(EstadoJuego *estado)
             nuevo_clima = CLIMA_LLUVIOSO;
         }
 
+        // Detener sonidos anteriores
         if (estado->clima_actual == CLIMA_TORMENTA &&
             (nuevo_clima == CLIMA_SOLEADO || nuevo_clima == CLIMA_LLUVIOSO))
         {
-            Mix_HaltChannel(-1);
+            Mix_HaltChannel(canal_lluvia);
+            canal_lluvia = -1;
         }
 
         estado->clima_actual = nuevo_clima;
         estado->tiempo_inicio_dia = tiempo_actual;
 
-        switch (estado->clima_actual)
+        // Manejar sonidos según el clima
+        if (estado->clima_actual == CLIMA_SOLEADO)
         {
-        case CLIMA_SOLEADO:
-            temperatura_ambiente = 25 + (rand() % 5);
-            break;
-        case CLIMA_LLUVIOSO:
-            temperatura_ambiente = 15 + (rand() % 5);
-            break;
-        case CLIMA_TORMENTA:
-            temperatura_ambiente = 10 + (rand() % 5);
-            if (estado->sonido_clima)
+            if (canal_lluvia != -1)
             {
-                Mix_HaltChannel(-1);
-                if (Mix_PlayChannel(-1, estado->sonido_clima, 0) == -1)
-                {
-                    printf("Error al reproducir sonido de clima: %s\n", Mix_GetError());
-                }
+                Mix_HaltChannel(canal_lluvia);
+                canal_lluvia = -1;
             }
-            break;
+        }
+        else if ((estado->clima_actual == CLIMA_LLUVIOSO ||
+                  estado->clima_actual == CLIMA_TORMENTA) &&
+                 canal_lluvia == -1 && estado->sonido_clima)
+        {
+            canal_lluvia = Mix_PlayChannel(-1, estado->sonido_clima, -1);
         }
 
         clima_anterior = estado->clima_actual;
+    }
+}
+void reiniciar_partida(bool nuevo_juego, EstadoJuego *estado)
+{
+    if (nuevo_juego)
+    {
+        // Reiniciar todo desde cero
+        inicializar_jugador();
+        inicializar_mapa();
+
+        // Limpiar todos los recursos y animales existentes
+        for (int i = 0; i < MAX_RECURSOS; i++)
+        {
+            recursos[i].activo = 0;
+        }
+        for (int i = 0; i < MAX_ANIMALES; i++)
+        {
+            animales[i].activo = 0;
+        }
+
+        // Generar nuevos recursos
+        void generar_recursos(void);
+
+        // Establecer tiempo inicial (7:00 AM)
+        estado->tiempo_inicio_dia = SDL_GetTicks();
+        estado->es_de_dia = true;
+        estado->clima_actual = CLIMA_SOLEADO;
+    }
+    else
+    {
+        // Mantener el inventario existente
+        int inventario_temp[10];
+        memcpy(inventario_temp, jugador.inventario, sizeof(jugador.inventario));
+        inicializar_jugador();
+        memcpy(jugador.inventario, inventario_temp, sizeof(jugador.inventario));
+
+        // Mantener el mismo mapa pero regenerar recursos
+        void generar_recursos(void);
+    }
+
+    if (estado->musica_dia)
+    {
+        Mix_HaltMusic();
+        Mix_PlayMusic(estado->musica_dia, -1);
     }
 }
 
@@ -221,21 +329,65 @@ void actualizar_ciclo_dia_noche(EstadoJuego *estado)
     Uint32 tiempo_actual = SDL_GetTicks();
     bool era_de_dia = estado->es_de_dia;
 
-    estado->es_de_dia = ((tiempo_actual / DURACION_DIA) % 2) == 0;
+    // Actualizar ciclo día/noche
+    estado->es_de_dia = ((tiempo_actual / DURACION_MITAD_DIA) % 2) == 0;
 
     if (era_de_dia != estado->es_de_dia)
     {
         if (estado->es_de_dia)
         {
+            // Amanecer
             if (estado->musica_dia)
                 Mix_PlayMusic(estado->musica_dia, -1);
-            temperatura_ambiente += 5;
+
+            // Regenerar recursos
+            int arboles = 0, rocas = 0;
+
+            // Contar recursos actuales
+            for (int y = 0; y < TAM_MAPA; y++)
+            {
+                for (int x = 0; x < TAM_MAPA; x++)
+                {
+                    if (mapa[y][x] == 4)
+                        arboles++;
+                    if (mapa[y][x] == 3)
+                        rocas++;
+                }
+            }
+
+            // Generar árboles faltantes
+            while (arboles < NUM_ARBOLES_INICIAL)
+            {
+                int x, y;
+                do
+                {
+                    x = rand() % TAM_MAPA;
+                    y = rand() % TAM_MAPA;
+                } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                mapa[y][x] = 4;
+                arboles++;
+            }
+
+            // Generar rocas faltantes
+            while (rocas < NUM_ROCAS_INICIAL)
+            {
+                int x, y;
+                do
+                {
+                    x = rand() % TAM_MAPA;
+                    y = rand() % TAM_MAPA;
+                } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                mapa[y][x] = 3;
+                rocas++;
+            }
         }
         else
         {
+            // Anochecer
             if (estado->musica_noche)
                 Mix_PlayMusic(estado->musica_noche, -1);
-            temperatura_ambiente -= 5;
         }
     }
 }
@@ -243,13 +395,15 @@ void actualizar_ciclo_dia_noche(EstadoJuego *estado)
 void actualizar_construcciones(void)
 {
     Uint32 tiempo_actual = SDL_GetTicks();
+
+    // Para cada construcción activa
     for (int i = 0; i < 5; i++)
     {
         if (jugador.construcciones[i].activa)
         {
-            // Reducir durabilidad con el tiempo
+            // Reducir durabilidad con el tiempo (cada 10 segundos)
             if (tiempo_actual - jugador.construcciones[i].tiempo_creacion > 10000)
-            { // cada 10 segundos
+            {
                 jugador.construcciones[i].durabilidad--;
                 jugador.construcciones[i].tiempo_creacion = tiempo_actual;
             }
@@ -257,10 +411,74 @@ void actualizar_construcciones(void)
             // Manejar cultivos
             if (jugador.construcciones[i].tipo == TIPO_CULTIVO)
             {
-                if (tiempo_actual - jugador.construcciones[i].tiempo_creacion > 30000)
-                {                                             // 30 segundos para crecer
-                    jugador.inventario[3]++;                  // Añadir fruta
-                    jugador.construcciones[i].activa = false; // El cultivo se consume
+                // Generar fruta y semilla cada 30 segundos
+                if (tiempo_actual - jugador.construcciones[i].tiempo_creacion >= 30000)
+                {
+                    // Buscar espacio para la fruta
+                    for (int r = 0; r < MAX_RECURSOS; r++)
+                    {
+                        if (!recursos[r].activo)
+                        {
+                            // Colocar fruta en la posición del cultivo
+                            recursos[r].x = jugador.construcciones[i].x;
+                            recursos[r].y = jugador.construcciones[i].y;
+                            recursos[r].tipo = 2; // Fruta
+                            recursos[r].activo = 1;
+                            break;
+                        }
+                    }
+
+                    // Buscar espacio para la semilla en tiles adyacentes
+                    int direcciones[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};
+                    bool semilla_colocada = false;
+
+                    // Intentar colocar en una dirección aleatoria
+                    int dir_inicial = rand() % 4;
+                    for (int d = 0; d < 4 && !semilla_colocada; d++)
+                    {
+                        int dir = (dir_inicial + d) % 4;
+                        int nuevo_x = jugador.construcciones[i].x + direcciones[dir][0];
+                        int nuevo_y = jugador.construcciones[i].y + direcciones[dir][1];
+
+                        if (nuevo_x >= 0 && nuevo_x < TAM_MAPA &&
+                            nuevo_y >= 0 && nuevo_y < TAM_MAPA &&
+                            forma_isla[nuevo_y][nuevo_x] &&
+                            mapa[nuevo_y][nuevo_x] == 2)
+                        {
+
+                            // Verificar si el espacio está libre
+                            bool espacio_ocupado = false;
+                            for (int r = 0; r < MAX_RECURSOS; r++)
+                            {
+                                if (recursos[r].activo &&
+                                    recursos[r].x == nuevo_x &&
+                                    recursos[r].y == nuevo_y)
+                                {
+                                    espacio_ocupado = true;
+                                    break;
+                                }
+                            }
+
+                            if (!espacio_ocupado)
+                            {
+                                for (int r = 0; r < MAX_RECURSOS; r++)
+                                {
+                                    if (!recursos[r].activo)
+                                    {
+                                        recursos[r].x = nuevo_x;
+                                        recursos[r].y = nuevo_y;
+                                        recursos[r].tipo = 3; // Semilla
+                                        recursos[r].activo = 1;
+                                        semilla_colocada = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Resetear el tiempo para el siguiente ciclo
+                    jugador.construcciones[i].tiempo_creacion = tiempo_actual;
                 }
             }
 
@@ -342,11 +560,10 @@ void renderizar_texto(EstadoJuego *estado, const char *texto, int x, int y, SDL_
 void renderizar_interfaz(EstadoJuego *estado)
 {
     char texto[100];
-    int y_offset = 10;
-    int x_controles = 10;              // Panel izquierdo para controles
-    int x_stats = ANCHO_VENTANA - 200; // Panel derecho para estadísticas
+    int y_offset = 15;
+    int x_controles = 10;
+    int x_stats = ANCHO_VENTANA - 230;
 
-    // Colores para la interfaz
     SDL_Color color_titulo = {255, 215, 0, 255};   // Dorado
     SDL_Color color_stats = {0, 255, 0, 255};      // Verde brillante
     SDL_Color color_bajo = {255, 50, 50, 255};     // Rojo suave
@@ -354,150 +571,173 @@ void renderizar_interfaz(EstadoJuego *estado)
     SDL_Color color_alto = {100, 255, 255, 255};   // Cyan brillante
     SDL_Color color_especial = {255, 128, 0, 255}; // Naranja
 
-    // Panel izquierdo semi-transparente (Controles)
+    // Panel izquierdo
     SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 40, 200);
     SDL_Rect panelIzquierdo = {0, 0, 250, ALTO_VENTANA};
     SDL_RenderFillRect(estado->renderizador, &panelIzquierdo);
 
-    // Panel derecho semi-transparente (Estadísticas)
-    SDL_Rect panelDerecho = {ANCHO_VENTANA - 200, 0, 200, ALTO_VENTANA};
+    // Panel derecho
+    SDL_Rect panelDerecho = {ANCHO_VENTANA - 250, 0, 250, ALTO_VENTANA};
     SDL_RenderFillRect(estado->renderizador, &panelDerecho);
 
-    // === CONTROLES (PANEL IZQUIERDO) ===
-    renderizar_texto(estado, "=== CONTROLES ===", x_controles, y_offset, color_titulo);
-    y_offset += 40;
-
-    renderizar_texto(estado, "Movimiento:", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "W - Arriba", x_controles + 10, y_offset += 25, color_normal);
-    renderizar_texto(estado, "S - Abajo", x_controles + 10, y_offset += 25, color_normal);
-    renderizar_texto(estado, "A - Izquierda", x_controles + 10, y_offset += 25, color_normal);
-    renderizar_texto(estado, "D - Derecha", x_controles + 10, y_offset += 25, color_normal);
-
-    y_offset += 20;
-    renderizar_texto(estado, "Acciones:", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "E - Recolectar", x_controles + 10, y_offset += 25, color_normal);
-    renderizar_texto(estado, "ESPACIO - Comer", x_controles + 10, y_offset += 25, color_normal);
-
-    y_offset += 20;
+    // === CONSTRUCCIONES ===
     renderizar_texto(estado, "=== CONSTRUCCIONES ===", x_controles, y_offset, color_titulo);
-    y_offset += 30;
+    y_offset += 35;
 
     renderizar_texto(estado, "Refugio (R):", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "- 10 madera", x_controles + 10, y_offset += 20, color_normal);
-    renderizar_texto(estado, "- 5 piedra", x_controles + 10, y_offset += 20, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "- 10 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "Tiempo: 10s", x_controles + 10, y_offset, color_normal);
 
-    y_offset += 10;
+    y_offset += 30;
     renderizar_texto(estado, "Fogata (F):", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "- 5 madera", x_controles + 10, y_offset += 20, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "- 5 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "- 1 piedra", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "Tiempo: 5s", x_controles + 10, y_offset, color_normal);
 
-    y_offset += 10;
+    y_offset += 30;
     renderizar_texto(estado, "Cultivo (C):", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "- 3 madera", x_controles + 10, y_offset += 20, color_normal);
-    renderizar_texto(estado, "- 1 semilla", x_controles + 10, y_offset += 20, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "- 3 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "- 1 semilla", x_controles + 10, y_offset, color_normal);
+
+    y_offset += 30;
+    renderizar_texto(estado, "Barco (B):", x_controles, y_offset, color_especial);
+    y_offset += 25;
+    renderizar_texto(estado, "- 50 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "- 20 piedra", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "Tiempo: 30s", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "(Solo en arena)", x_controles + 10, y_offset, color_normal);
 
     // === CRAFTEO ===
-    y_offset += 20;
+    y_offset += 35;
     renderizar_texto(estado, "=== CRAFTEO ===", x_controles, y_offset, color_titulo);
+    y_offset += 35;
+
+    renderizar_texto(estado, "Espada (1):", x_controles, y_offset, color_especial);
+    y_offset += 25;
+    renderizar_texto(estado, "- 10 roca", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "- 5 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "Tiempo: 10s", x_controles + 10, y_offset, color_normal);
+
     y_offset += 30;
+    renderizar_texto(estado, "Armadura (2):", x_controles, y_offset, color_especial);
+    y_offset += 25;
+    renderizar_texto(estado, "- 15 roca", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "- 8 madera", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "Tiempo: 15s", x_controles + 10, y_offset, color_normal);
+    y_offset += 20;
+    renderizar_texto(estado, "(Requiere espada)", x_controles + 10, y_offset, color_normal);
 
-    renderizar_texto(estado, "Antorcha (T):", x_controles, y_offset, color_especial);
-    renderizar_texto(estado, "- 3 madera", x_controles + 10, y_offset += 20, color_normal);
-
-    renderizar_texto(estado, "Espada (1):", x_controles, y_offset += 25, color_especial);
-    renderizar_texto(estado, "- 5 madera", x_controles + 10, y_offset += 20, color_normal);
-    renderizar_texto(estado, "- 3 piedra", x_controles + 10, y_offset += 20, color_normal);
-
-    renderizar_texto(estado, "Armadura (2):", x_controles, y_offset += 25, color_especial);
-    renderizar_texto(estado, "- 8 madera", x_controles + 10, y_offset += 20, color_normal);
-    renderizar_texto(estado, "- 5 piedra", x_controles + 10, y_offset += 20, color_normal);
-    renderizar_texto(estado, "(Requiere espada)", x_controles + 10, y_offset += 20, color_normal);
-
-    // === ESTADÍSTICAS (PANEL DERECHO) ===
-    y_offset = 10;
-    renderizar_texto(estado, "=== ESTADÍSTICAS ===", x_stats, y_offset, color_titulo);
-    y_offset += 30;
+    // === ESTADISTICAS ===
+    y_offset = 15;
+    renderizar_texto(estado, "=== ESTADISTICAS ===", x_stats, y_offset, color_titulo);
+    y_offset += 35;
 
     // Barras de estado
     SDL_Rect barra;
     int ancho_barra = 150;
     int alto_barra = 15;
 
-    // Barra de Salud
-    sprintf(texto, "Salud: %d/%d", jugador.salud, jugador.vida_maxima);
+    // Salud
+    sprintf(texto, "Salud: %d/100", jugador.salud);
     renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
-    barra = (SDL_Rect){x_stats, y_offset + 20, (jugador.salud * ancho_barra) / jugador.vida_maxima, alto_barra};
+    barra = (SDL_Rect){x_stats, y_offset + 20, (jugador.salud * ancho_barra) / 100, alto_barra};
     SDL_SetRenderDrawColor(estado->renderizador, 255, 0, 0, 255);
     SDL_RenderFillRect(estado->renderizador, &barra);
 
-    // Barra de Energía
-    y_offset += 45;
-    sprintf(texto, "Energía: %d/100", jugador.energia < 0 ? 0 : jugador.energia);
+    // Energia
+    y_offset += 50;
+    sprintf(texto, "Energia: %d/100", jugador.energia);
     renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
-    barra = (SDL_Rect){x_stats, y_offset + 20,
-                       ((jugador.energia < 0 ? 0 : jugador.energia) * ancho_barra) / 100, alto_barra};
+    barra = (SDL_Rect){x_stats, y_offset + 20, (jugador.energia * ancho_barra) / 100, alto_barra};
     SDL_SetRenderDrawColor(estado->renderizador, 255, 255, 0, 255);
     SDL_RenderFillRect(estado->renderizador, &barra);
 
-    // Barra de Hambre
-    y_offset += 45;
+    // Hambre
+    y_offset += 50;
     sprintf(texto, "Hambre: %d/100", jugador.hambre);
     renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
     barra = (SDL_Rect){x_stats, y_offset + 20, (jugador.hambre * ancho_barra) / 100, alto_barra};
-    SDL_SetRenderDrawColor(estado->renderizador, 139, 69, 19, 255); // Marrón
+    SDL_SetRenderDrawColor(estado->renderizador, 139, 69, 19, 255);
     SDL_RenderFillRect(estado->renderizador, &barra);
 
-    // Barra de Sed
-    y_offset += 45;
+    // Sed
+    y_offset += 50;
     sprintf(texto, "Sed: %d/100", jugador.sed);
     renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
     barra = (SDL_Rect){x_stats, y_offset + 20, (jugador.sed * ancho_barra) / 100, alto_barra};
-    SDL_SetRenderDrawColor(estado->renderizador, 0, 191, 255, 255); // Azul claro
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 191, 255, 255);
     SDL_RenderFillRect(estado->renderizador, &barra);
 
-    // Temperatura
-    y_offset += 45;
-    SDL_Color color_temp = jugador.temperatura < 10 ? color_bajo : jugador.temperatura > 35 ? color_alto
-                                                                                            : color_normal;
-    sprintf(texto, "Temperatura: %d°C %s", jugador.temperatura,
-            jugador.temperatura < 10 ? "[-]" : jugador.temperatura > 35 ? "[+]"
-                                                                        : "[=]");
-    renderizar_texto(estado, texto, x_stats, y_offset, color_temp);
-
-    // === INVENTARIO ===
-    y_offset += 45;
-    renderizar_texto(estado, "=== INVENTARIO ===", x_stats, y_offset, color_titulo);
-    y_offset += 30;
-
-    sprintf(texto, "[*] Madera: %d", jugador.inventario[0]);
-    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
-
-    sprintf(texto, "[#] Piedra: %d", jugador.inventario[1]);
-    renderizar_texto(estado, texto, x_stats, y_offset += 25, color_normal);
-
-    sprintf(texto, "[M] Carne: %d", jugador.inventario[2]);
-    renderizar_texto(estado, texto, x_stats, y_offset += 25, color_normal);
-
-    sprintf(texto, "[O] Fruta: %d", jugador.inventario[3]);
-    renderizar_texto(estado, texto, x_stats, y_offset += 25, color_normal);
-
-    sprintf(texto, "[.] Semillas: %d", jugador.inventario[4]);
-    renderizar_texto(estado, texto, x_stats, y_offset += 25, color_normal);
-
     // === AMBIENTE ===
-    y_offset += 40;
+    y_offset += 45;
     renderizar_texto(estado, "=== AMBIENTE ===", x_stats, y_offset, color_titulo);
-    y_offset += 30;
+    y_offset += 35;
 
-    sprintf(texto, "Clima: %s %s",
+    sprintf(texto, "Clima: %s",
             estado->clima_actual == CLIMA_SOLEADO ? "Soleado" : estado->clima_actual == CLIMA_LLUVIOSO ? "Lluvioso"
-                                                                                                       : "Tormenta",
-            estado->clima_actual == CLIMA_SOLEADO ? "[O]" : estado->clima_actual == CLIMA_LLUVIOSO ? "[~]"
-                                                                                                   : "[!]");
+                                                                                                       : "Tormenta");
     renderizar_texto(estado, texto, x_stats, y_offset, color_especial);
 
-    sprintf(texto, "Hora: %s %s", estado->es_de_dia ? "Día" : "Noche",
-            estado->es_de_dia ? "[D]" : "[N]");
-    renderizar_texto(estado, texto, x_stats, y_offset += 25, color_especial);
+    y_offset += 25;
+    sprintf(texto, "Hora: %s", estado->es_de_dia ? "Dia" : "Noche");
+    renderizar_texto(estado, texto, x_stats, y_offset, color_especial);
+
+    // === INVENTARIO ===
+    y_offset += 50;
+    renderizar_texto(estado, "=== INVENTARIO ===", x_stats, y_offset, color_titulo);
+    y_offset += 35;
+
+    sprintf(texto, "Madera: %d", jugador.inventario[0]);
+    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
+
+    y_offset += 25;
+    sprintf(texto, "Piedra: %d", jugador.inventario[1]);
+    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
+
+    y_offset += 25;
+    sprintf(texto, "Carne: %d", jugador.inventario[2]);
+    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
+
+    y_offset += 25;
+    sprintf(texto, "Fruta: %d", jugador.inventario[3]);
+    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
+
+    y_offset += 25;
+    sprintf(texto, "Semillas: %d", jugador.inventario[4]);
+    renderizar_texto(estado, texto, x_stats, y_offset, color_normal);
+
+    // === CONTROLES ===
+    y_offset += 45;
+    renderizar_texto(estado, "=== CONTROLES ===", x_stats, y_offset, color_titulo);
+    y_offset += 35;
+
+    renderizar_texto(estado, "W - Arriba", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "S - Abajo", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "A - Izquierda", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "D - Derecha", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "E - Recolectar", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "ESPACIO - Comer/Beber", x_stats, y_offset, color_normal);
+    y_offset += 25;
+    renderizar_texto(estado, "ENTER - Atacar", x_stats, y_offset, color_normal);
 }
 
 void renderizar_juego(EstadoJuego *estado)
@@ -506,11 +746,20 @@ void renderizar_juego(EstadoJuego *estado)
     SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 255);
     SDL_RenderClear(estado->renderizador);
 
-    // Calcular el área del mapa (entre las interfaces)
+    // Calcular dimensiones del mapa
     int ancho_interfaces = 250;
     int x_inicio_mapa = ancho_interfaces;
     int ancho_mapa = ANCHO_VENTANA - (2 * ancho_interfaces);
-    float escala_mapa = (float)ancho_mapa / (TAM_MAPA * TAM_CASILLA);
+    int alto_mapa = ALTO_VENTANA;
+
+    // Calcular escala para ajustar el mapa al espacio disponible
+    float escala_x = (float)ancho_mapa / (TAM_MAPA * TAM_CASILLA);
+    float escala_y = (float)alto_mapa / (TAM_MAPA * TAM_CASILLA);
+    float escala_mapa = MIN(escala_x, escala_y);
+
+    // Calcular offset para centrar el mapa
+    int offset_x = x_inicio_mapa + (ancho_mapa - (TAM_MAPA * TAM_CASILLA * escala_mapa)) / 2;
+    int offset_y = (alto_mapa - (TAM_MAPA * TAM_CASILLA * escala_mapa)) / 2;
 
     // Renderizar mapa base
     for (int y = 0; y < TAM_MAPA; y++)
@@ -518,19 +767,14 @@ void renderizar_juego(EstadoJuego *estado)
         for (int x = 0; x < TAM_MAPA; x++)
         {
             SDL_Rect destRect = {
-                x_inicio_mapa + (int)(x * TAM_CASILLA * escala_mapa),
-                (int)(y * TAM_CASILLA * escala_mapa),
+                offset_x + (int)(x * TAM_CASILLA * escala_mapa),
+                offset_y + (int)(y * TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa)};
 
             SDL_Color color_terreno = forma_isla[y][x] == 0 ? color_agua : mapa[y][x] == 1 ? color_arena
                                                                                            : color_pasto;
-
-            SDL_SetRenderDrawColor(estado->renderizador,
-                                   color_terreno.r,
-                                   color_terreno.g,
-                                   color_terreno.b,
-                                   color_terreno.a);
+            SDL_SetRenderDrawColor(estado->renderizador, color_terreno.r, color_terreno.g, color_terreno.b, color_terreno.a);
             SDL_RenderFillRect(estado->renderizador, &destRect);
 
             if (mapa[y][x] == 3) // Roca
@@ -546,8 +790,8 @@ void renderizar_juego(EstadoJuego *estado)
         if (recursos[i].activo)
         {
             SDL_Rect destRect = {
-                x_inicio_mapa + (int)(recursos[i].x * TAM_CASILLA * escala_mapa),
-                (int)(recursos[i].y * TAM_CASILLA * escala_mapa),
+                offset_x + (int)(recursos[i].x * TAM_CASILLA * escala_mapa),
+                offset_y + (int)(recursos[i].y * TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa)};
 
@@ -559,6 +803,9 @@ void renderizar_juego(EstadoJuego *estado)
             case 3: // Semilla
                 SDL_RenderCopy(estado->renderizador, estado->textura_semilla, NULL, &destRect);
                 break;
+            case 4: // Carne
+                SDL_RenderCopy(estado->renderizador, estado->textura_carne, NULL, &destRect);
+                break;
             }
         }
     }
@@ -569,8 +816,8 @@ void renderizar_juego(EstadoJuego *estado)
         if (jugador.construcciones[i].activa)
         {
             SDL_Rect destRect = {
-                x_inicio_mapa + (int)(jugador.construcciones[i].x * TAM_CASILLA * escala_mapa),
-                (int)(jugador.construcciones[i].y * TAM_CASILLA * escala_mapa),
+                offset_x + (int)(jugador.construcciones[i].x * TAM_CASILLA * escala_mapa),
+                offset_y + (int)(jugador.construcciones[i].y * TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa)};
 
@@ -585,6 +832,9 @@ void renderizar_juego(EstadoJuego *estado)
             case TIPO_CULTIVO:
                 SDL_RenderCopy(estado->renderizador, estado->textura_cultivo, NULL, &destRect);
                 break;
+            case TIPO_EMBARCACION:
+                SDL_RenderCopy(estado->renderizador, estado->textura_barco, NULL, &destRect);
+                break;
             }
         }
     }
@@ -595,14 +845,14 @@ void renderizar_juego(EstadoJuego *estado)
         if (animales[i].activo)
         {
             SDL_Rect destRect = {
-                x_inicio_mapa + (int)(animales[i].x * TAM_CASILLA * escala_mapa),
-                (int)(animales[i].y * TAM_CASILLA * escala_mapa),
+                offset_x + (int)(animales[i].x * TAM_CASILLA * escala_mapa),
+                offset_y + (int)(animales[i].y * TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa),
                 (int)ceil(TAM_CASILLA * escala_mapa)};
 
             SDL_Rect barraVida = {
-                x_inicio_mapa + (int)(animales[i].x * TAM_CASILLA * escala_mapa),
-                (int)(animales[i].y * TAM_CASILLA * escala_mapa - 5),
+                offset_x + (int)(animales[i].x * TAM_CASILLA * escala_mapa),
+                offset_y + (int)(animales[i].y * TAM_CASILLA * escala_mapa - 5),
                 (int)((animales[i].vida * TAM_CASILLA * escala_mapa) / VIDA_ANIMAL),
                 3};
             SDL_SetRenderDrawColor(estado->renderizador, 255, 0, 0, 255);
@@ -616,78 +866,36 @@ void renderizar_juego(EstadoJuego *estado)
 
     // Renderizar jugador
     SDL_Rect jugadorRect = {
-        x_inicio_mapa + (int)(jugador.x * TAM_CASILLA * escala_mapa),
-        (int)(jugador.y * TAM_CASILLA * escala_mapa),
+        offset_x + (int)(jugador.x * TAM_CASILLA * escala_mapa),
+        offset_y + (int)(jugador.y * TAM_CASILLA * escala_mapa),
         (int)ceil(TAM_CASILLA * escala_mapa),
         (int)ceil(TAM_CASILLA * escala_mapa)};
 
     SDL_Texture *textura_actual = estado->textura_personaje;
-    if (jugador.tiene_antorcha)
-        textura_actual = estado->textura_personaje_antorcha;
-    else if (jugador.tiene_armadura)
+    if (jugador.tiene_armadura)
         textura_actual = estado->textura_personaje_equipado;
     else if (jugador.tiene_espada)
         textura_actual = estado->textura_personaje_espada;
 
     SDL_RenderCopy(estado->renderizador, textura_actual, NULL, &jugadorRect);
 
-    // Efectos climáticos y de iluminación
+    // Efectos de iluminación y clima
     if (!estado->es_de_dia)
     {
-        // Aplicar oscuridad de noche a todo el mapa
         SDL_SetRenderDrawBlendMode(estado->renderizador, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 20, 230);
+        SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 20, 100);
+        SDL_Rect pantalla = {x_inicio_mapa, 0, ancho_mapa, ALTO_VENTANA};
+        SDL_RenderFillRect(estado->renderizador, &pantalla);
+    }
+
+    // Renderizar lluvia
+    if (estado->clima_actual == CLIMA_LLUVIOSO || estado->clima_actual == CLIMA_TORMENTA)
+    {
+        SDL_SetRenderDrawBlendMode(estado->renderizador, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 20, 50);
         SDL_Rect pantalla = {x_inicio_mapa, 0, ancho_mapa, ALTO_VENTANA};
         SDL_RenderFillRect(estado->renderizador, &pantalla);
 
-        // Si tiene antorcha, iluminar el área de visión
-        if (jugador.tiene_antorcha)
-        {
-            for (int y = -RADIO_VISION_ANTORCHA; y <= RADIO_VISION_ANTORCHA; y++)
-            {
-                for (int x = -RADIO_VISION_ANTORCHA; x <= RADIO_VISION_ANTORCHA; x++)
-                {
-                    int tile_x = jugador.x + x;
-                    int tile_y = jugador.y + y;
-
-                    if (tile_x >= 0 && tile_x < TAM_MAPA && tile_y >= 0 && tile_y < TAM_MAPA)
-                    {
-                        float distancia = sqrt(x * x + y * y);
-                        if (distancia <= RADIO_VISION_ANTORCHA)
-                        {
-                            SDL_Rect tileRect = {
-                                x_inicio_mapa + (int)(tile_x * TAM_CASILLA * escala_mapa),
-                                (int)(tile_y * TAM_CASILLA * escala_mapa),
-                                (int)ceil(TAM_CASILLA * escala_mapa),
-                                (int)ceil(TAM_CASILLA * escala_mapa)};
-
-                            // Limpiar la oscuridad de la noche
-                            SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 230);
-                            SDL_RenderFillRect(estado->renderizador, &tileRect);
-
-                            // Aplicar el efecto de día lluvioso (ligeramente oscuro)
-                            SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 20, 100);
-                            SDL_RenderFillRect(estado->renderizador, &tileRect);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Efecto de lluvia
-    if (estado->clima_actual == CLIMA_LLUVIOSO || estado->clima_actual == CLIMA_TORMENTA)
-    {
-        // Si es de día, oscurecer ligeramente
-        if (estado->es_de_dia)
-        {
-            SDL_SetRenderDrawBlendMode(estado->renderizador, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 20, 100);
-            SDL_Rect pantalla = {x_inicio_mapa, 0, ancho_mapa, ALTO_VENTANA};
-            SDL_RenderFillRect(estado->renderizador, &pantalla);
-        }
-
-        // Renderizar la lluvia
         int num_gotas = estado->clima_actual == CLIMA_TORMENTA ? 200 : 100;
         static int *gotas = NULL;
 
@@ -730,14 +938,72 @@ void renderizar_juego(EstadoJuego *estado)
         }
     }
 
-    // Renderizar interfaz y presentar
+    // Renderizar interfaz
     renderizar_interfaz(estado);
     SDL_RenderPresent(estado->renderizador);
+}
+void mostrar_pantalla_victoria(EstadoJuego *estado, int *ejecutando)
+{
+    // Detener música actual y reproducir sonido de victoria
+    Mix_HaltMusic();
+    if (estado->sonido_victoria)
+    {
+        Mix_PlayChannel(-1, estado->sonido_victoria, 0);
+    }
+
+    // Limpiar pantalla
+    SDL_SetRenderDrawColor(estado->renderizador, 0, 0, 0, 255);
+    SDL_RenderClear(estado->renderizador);
+
+    // Colores para el texto
+    SDL_Color color_dorado = {255, 215, 0, 255};   // Color dorado
+    SDL_Color color_blanco = {255, 255, 255, 255}; // Color blanco
+
+    // Renderizar textos de victoria centrados
+    renderizar_texto(estado, "¡FELICITACIONES!", ANCHO_VENTANA / 2 - 150, ALTO_VENTANA / 2 - 100, color_dorado);
+    renderizar_texto(estado, "¡ESCAPASTE DE LA ISLA!", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 - 50, color_dorado);
+    renderizar_texto(estado, "ESPACIO - Nueva partida", ANCHO_VENTANA / 2 - 150, ALTO_VENTANA / 2 + 50, color_blanco);
+    renderizar_texto(estado, "ESC - Salir", ANCHO_VENTANA / 2 - 150, ALTO_VENTANA / 2 + 80, color_blanco);
+
+    // Actualizar pantalla
+    SDL_RenderPresent(estado->renderizador);
+
+    // Esperar input del usuario
+    SDL_Event evento;
+    bool esperando_input = true;
+    while (esperando_input)
+    {
+        while (SDL_PollEvent(&evento))
+        {
+            if (evento.type == SDL_QUIT)
+            {
+                esperando_input = false;
+                *ejecutando = 0;
+            }
+            else if (evento.type == SDL_KEYDOWN)
+            {
+                if (evento.key.keysym.sym == SDLK_SPACE)
+                {
+                    reiniciar_partida(true, estado);
+                    esperando_input = false;
+                }
+                else if (evento.key.keysym.sym == SDLK_ESCAPE)
+                {
+                    esperando_input = false;
+                    *ejecutando = 0;
+                }
+            }
+        }
+        SDL_Delay(16); // Controlar la frecuencia de actualización
+    }
 }
 void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
 {
     static Uint32 ultima_accion = 0;
     const Uint32 DELAY_ACCION = 200;
+
+    // Primero verificamos si hay construcciones en progreso
+    manejar_construccion(estado, -1); // Pasamos -1 para indicar que solo queremos verificar el progreso
 
     while (SDL_PollEvent(evento))
     {
@@ -759,108 +1025,143 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
 
             switch (evento->key.keysym.sym)
             {
-            case SDLK_w:
+            case SDLK_w: // Movimiento hacia arriba
                 if (jugador.y > 0 && forma_isla[jugador.y - 1][jugador.x])
                     jugador.y--;
                 break;
-            case SDLK_s:
+            case SDLK_s: // Movimiento hacia abajo
                 if (jugador.y < TAM_MAPA - 1 && forma_isla[jugador.y + 1][jugador.x])
                     jugador.y++;
                 break;
-            case SDLK_a:
+            case SDLK_a: // Movimiento hacia la izquierda
                 if (jugador.x > 0 && forma_isla[jugador.y][jugador.x - 1])
                     jugador.x--;
                 break;
-            case SDLK_d:
+            case SDLK_d: // Movimiento hacia la derecha
                 if (jugador.x < TAM_MAPA - 1 && forma_isla[jugador.y][jugador.x + 1])
                     jugador.x++;
                 break;
-            case SDLK_e: // Recolectar
-                // Recolectar recursos
+
+            case SDLK_e: // Recolectar recursos
                 for (int i = 0; i < MAX_RECURSOS; i++)
                 {
-                    if (recursos[i].activo &&
-                        recursos[i].x == jugador.x &&
-                        recursos[i].y == jugador.y)
+                    if (recursos[i].activo && recursos[i].x == jugador.x && recursos[i].y == jugador.y)
                     {
-                        switch (recursos[i].tipo)
+                        if (recursos[i].tipo == 2) // Fruta
                         {
-                        case 2:                      // Fruta
-                            jugador.inventario[3]++; // Aumenta contador de fruta
-                            break;
-                        case 3:                      // Semilla
-                            jugador.inventario[4]++; // Aumenta contador de semillas
-                            break;
+                            jugador.inventario[3]++;
+                            jugador.inventario[4]++;
+                        }
+                        else if (recursos[i].tipo == 3) // Semilla
+                        {
+                            jugador.inventario[4]++;
+                        }
+                        else if (recursos[i].tipo == 4) // Carne
+                        {
+                            jugador.inventario[2]++; // Incrementar contador de carne
                         }
                         recursos[i].activo = 0;
-                        jugador.energia = MAX(0, jugador.energia - 5);
+                        jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
                         break;
                     }
                 }
 
-                // Recolectar árbol o roca
-                if (mapa[jugador.y][jugador.x] == 4)
+                if (mapa[jugador.y][jugador.x] == 4) // Árbol
                 {
-                    jugador.inventario[0] += 3; // Madera
+                    jugador.inventario[0] += UNIDADES_POR_ARBOL;
                     mapa[jugador.y][jugador.x] = 2;
-                    jugador.energia = MAX(0, jugador.energia - 10);
+                    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
                 }
-                else if (mapa[jugador.y][jugador.x] == 3)
+                else if (mapa[jugador.y][jugador.x] == 3) // Roca
                 {
-                    jugador.inventario[1] += 2; // Piedra
+                    jugador.inventario[1] += UNIDADES_POR_ROCA;
                     mapa[jugador.y][jugador.x] = 2;
-                    jugador.energia = MAX(0, jugador.energia - 10);
+                    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_RECOLECCION);
                 }
                 break;
-            case SDLK_r:
-                manejar_construccion(TIPO_REFUGIO);
-                if (estado->sonido_construccion)
-                    Mix_PlayChannel(-1, estado->sonido_construccion, 0);
-                break;
-            case SDLK_f:
-                manejar_construccion(TIPO_FOGATA);
-                if (estado->sonido_construccion)
-                    Mix_PlayChannel(-1, estado->sonido_construccion, 0);
-                break;
-            case SDLK_c:
-                manejar_construccion(TIPO_CULTIVO);
-                if (estado->sonido_construccion)
-                    Mix_PlayChannel(-1, estado->sonido_construccion, 0);
-                break;
-            case SDLK_t: // Crear antorcha
-                if (!jugador.tiene_antorcha &&
-                    jugador.inventario[0] >= COSTO_ANTORCHA &&
-                    !estado->es_de_dia)
+
+            case SDLK_SPACE:                         // Comer o beber según el terreno
+                if (mapa[jugador.y][jugador.x] == 1) // Si está en arena
                 {
-                    jugador.tiene_antorcha = 1;
-                    jugador.inventario[0] -= COSTO_ANTORCHA;
-                    jugador.tiempo_inicio_antorcha = SDL_GetTicks();
+                    // Verificar si hay agua cerca
+                    bool agua_cerca = false;
+                    if (jugador.y > 0 && !forma_isla[jugador.y - 1][jugador.x])
+                        agua_cerca = true;
+                    if (jugador.y < TAM_MAPA - 1 && !forma_isla[jugador.y + 1][jugador.x])
+                        agua_cerca = true;
+                    if (jugador.x > 0 && !forma_isla[jugador.y][jugador.x - 1])
+                        agua_cerca = true;
+                    if (jugador.x < TAM_MAPA - 1 && !forma_isla[jugador.y][jugador.x + 1])
+                        agua_cerca = true;
+
+                    if (agua_cerca)
+                    {
+                        jugador.sed = MIN(100, jugador.sed + RECUPERACION_SED_RIO);
+                    }
+                }
+                else if (mapa[jugador.y][jugador.x] == 2) // Si está en pasto
+                {
+                    if (jugador.inventario[3] > 0) // Si tiene fruta
+                    {
+                        jugador.hambre = MIN(100, jugador.hambre + RECUPERACION_HAMBRE_FRUTA);
+                        jugador.salud = MIN(jugador.vida_maxima, jugador.salud + RECUPERACION_FRUTA_SALUD);
+                        jugador.energia = MIN(100, jugador.energia + 20);
+                        jugador.inventario[3]--;
+                    }
+                    else if (jugador.inventario[2] > 0) // Si tiene carne
+                    {
+                        jugador.hambre = MIN(100, jugador.hambre + RECUPERACION_CARNE_HAMBRE);
+                        jugador.salud = MIN(jugador.vida_maxima, jugador.salud + RECUPERACION_CARNE_SALUD);
+                        jugador.energia = MIN(100, jugador.energia + 20);
+                        jugador.inventario[2]--;
+                    }
                 }
                 break;
-            case SDLK_1: // Crear espada
+
+            case SDLK_r: // Construir refugio
+                manejar_construccion(estado, TIPO_REFUGIO);
+                break;
+
+            case SDLK_f: // Construir fogata
+                manejar_construccion(estado, TIPO_FOGATA);
+                break;
+
+            case SDLK_c: // Construir cultivo
+                manejar_construccion(estado, TIPO_CULTIVO);
+                break;
+
+            case SDLK_b: // Construir embarcación
+                if (mapa[jugador.y][jugador.x] == 1)
+                {
+                    manejar_construccion(estado, TIPO_EMBARCACION);
+                }
+                break;
+
+            case SDLK_1:
                 crear_espada();
                 break;
-            case SDLK_2: // Crear armadura
+
+            case SDLK_2:
                 crear_armadura();
-                break;
-            case SDLK_SPACE:                   // Comer
-                if (jugador.inventario[3] > 0) // Fruta
-                {
-                    jugador.hambre = MIN(100, jugador.hambre + 15);
-                    jugador.inventario[3]--;
-                }
-                else if (jugador.inventario[2] > 0) // Carne
-                {
-                    jugador.hambre = MIN(100, jugador.hambre + 30);
-                    jugador.inventario[2]--;
-                }
                 break;
             }
 
-            // Actualizar energía al moverse
+            // Verificar victoria después del movimiento
+            for (int i = 0; i < 5; i++)
+            {
+                if (jugador.construcciones[i].activa &&
+                    jugador.construcciones[i].tipo == TIPO_EMBARCACION &&
+                    jugador.x == jugador.construcciones[i].x &&
+                    jugador.y == jugador.construcciones[i].y)
+                {
+                    mostrar_pantalla_victoria(estado, ejecutando);
+                    return;
+                }
+            }
+
             if (x_anterior != jugador.x || y_anterior != jugador.y)
             {
-                jugador.energia = MAX(0, jugador.energia - 2);
+                jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_MOVIMIENTO);
             }
 
             // Verificar combate con animales
@@ -878,47 +1179,162 @@ void manejar_entrada(SDL_Event *evento, int *ejecutando, EstadoJuego *estado)
             }
         }
     }
+
+    // Actualizar ciclo día/noche
+    void actualizar_ciclo_dia_noche(EstadoJuego * estado);
 }
 
-void manejar_construccion(int tipo_construccion)
+void manejar_construccion(EstadoJuego *estado, int tipo_construccion)
 {
-    // Verificar recursos necesarios
-    int madera_necesaria = 0, piedra_necesaria = 0;
-    int costo_energia = 0;
+    static Uint32 tiempo_inicio_construccion = 0;
+    static bool construccion_en_progreso = false;
+    static int tipo_actual = -1;
+    static int espacio_actual = -1;
+    static int canal_construccion = -1;
+    static int canal_fuego = -1;
+    static int posicion_x = -1;
+    static int posicion_y = -1;
+
+    Uint32 tiempo_actual = SDL_GetTicks();
+    int madera_necesaria = 0;
+    int piedra_necesaria = 0;
+    int tiempo_requerido = 0;
+    bool requisitos_especiales = true;
+
+    // Si hay una construcción en progreso, verificar si se completó
+    if (construccion_en_progreso)
+    {
+        // Determinar el tiempo requerido según el tipo
+        switch (tipo_actual)
+        {
+        case TIPO_REFUGIO:
+            tiempo_requerido = TIEMPO_CONSTRUCCION_REFUGIO;
+            break;
+        case TIPO_FOGATA:
+            tiempo_requerido = TIEMPO_CONSTRUCCION_FOGATA;
+            break;
+        case TIPO_EMBARCACION:
+            tiempo_requerido = TIEMPO_CONSTRUCCION_EMBARCACION;
+            break;
+        case TIPO_CULTIVO:
+            tiempo_requerido = 5000;
+            break;
+        }
+
+        // Verificar si se completó el tiempo de construcción
+        if (tiempo_actual - tiempo_inicio_construccion >= tiempo_requerido)
+        {
+            // Detener sonidos
+            if (canal_construccion != -1)
+            {
+                Mix_HaltChannel(canal_construccion);
+                canal_construccion = -1;
+            }
+            if (canal_fuego != -1)
+            {
+                Mix_HaltChannel(canal_fuego);
+                canal_fuego = -1;
+            }
+
+            // Completar construcción
+            Construccion *nueva_construccion = &jugador.construcciones[espacio_actual];
+            nueva_construccion->tipo = tipo_actual;
+            nueva_construccion->x = posicion_x;
+            nueva_construccion->y = posicion_y;
+            nueva_construccion->activa = true;
+            nueva_construccion->durabilidad = 100;
+            nueva_construccion->tiempo_creacion = tiempo_actual;
+
+            // Efectos específicos según el tipo de construcción
+            switch (tipo_actual)
+            {
+            case TIPO_REFUGIO:
+                jugador.tiene_refugio = 1;
+                printf("¡Has construido un refugio!\n");
+                break;
+            case TIPO_CULTIVO:
+                jugador.inventario[4]--; // Consumir semilla
+                printf("¡Has construido un cultivo! Generará frutas y semillas cada 30 segundos.\n");
+                break;
+            case TIPO_EMBARCACION:
+                printf("¡Has construido la embarcación! ¡Puedes escapar de la isla!\n");
+                break;
+            case TIPO_FOGATA:
+                if (estado->sonido_fuego)
+                {
+                    canal_fuego = Mix_PlayChannel(-1, estado->sonido_fuego, -1);
+                }
+                printf("¡Has construido una fogata!\n");
+                break;
+            }
+
+            construccion_en_progreso = false;
+            tipo_actual = -1;
+            espacio_actual = -1;
+            tiempo_inicio_construccion = 0;
+            posicion_x = -1;
+            posicion_y = -1;
+
+            return;
+        }
+        else if (tipo_construccion == -1)
+        {
+            int progreso = ((tiempo_actual - tiempo_inicio_construccion) * 100) / tiempo_requerido;
+            printf("Construcción en progreso: %d%%\n", progreso);
+            return;
+        }
+        return;
+    }
+
+    if (tipo_construccion == -1)
+        return;
 
     switch (tipo_construccion)
     {
     case TIPO_REFUGIO:
-        madera_necesaria = 10;
-        piedra_necesaria = 5;
-        costo_energia = 20;
+        madera_necesaria = MADERA_REFUGIO;
+        tiempo_requerido = TIEMPO_CONSTRUCCION_REFUGIO;
         break;
     case TIPO_FOGATA:
-        madera_necesaria = 5;
-        costo_energia = 10;
-        piedra_necesaria = 0;
+        madera_necesaria = MADERA_FOGATA;
+        piedra_necesaria = ROCA_FOGATA;
+        tiempo_requerido = TIEMPO_CONSTRUCCION_FOGATA;
+        break;
+    case TIPO_EMBARCACION:
+        madera_necesaria = MADERA_EMBARCACION;
+        piedra_necesaria = ROCA_EMBARCACION;
+        tiempo_requerido = TIEMPO_CONSTRUCCION_EMBARCACION;
+        requisitos_especiales = (jugador.salud >= MIN_STATS_VICTORIA &&
+                                 jugador.hambre >= MIN_STATS_VICTORIA &&
+                                 jugador.sed >= MIN_STATS_VICTORIA);
         break;
     case TIPO_CULTIVO:
         madera_necesaria = 3;
-        costo_energia = 15;
-        piedra_necesaria = 0;
-        if (jugador.inventario[4] < 1)
-            return;
+        tiempo_requerido = 5000;
+        requisitos_especiales = (jugador.inventario[4] >= 1); // Verificar si tiene semillas
         break;
     default:
+        printf("Tipo de construcción inválido.\n");
         return;
     }
 
-    // Verificar si tiene suficientes recursos y energía
     if (jugador.inventario[0] < madera_necesaria ||
         jugador.inventario[1] < piedra_necesaria ||
-        jugador.energia < costo_energia)
+        jugador.energia < COSTO_ENERGIA_CONSTRUCCION ||
+        !requisitos_especiales)
     {
-        printf("No hay suficientes recursos o energía\n");
+        if (tipo_construccion == TIPO_CULTIVO && jugador.inventario[4] < 1)
+        {
+            printf("No tienes semillas para cultivar.\n");
+        }
+        else
+        {
+            printf("No hay suficientes recursos, energía o no se cumplen los requisitos.\n");
+        }
         return;
     }
 
-    // Verificar si hay espacio para una nueva construcción
+    // Buscar espacio disponible para la construcción
     int espacio_encontrado = -1;
     for (int i = 0; i < 5; i++)
     {
@@ -931,155 +1347,287 @@ void manejar_construccion(int tipo_construccion)
 
     if (espacio_encontrado == -1)
     {
-        printf("No hay espacio para más construcciones\n");
+        printf("No hay espacio para más construcciones.\n");
         return;
     }
 
-    // Realizar la construcción
-    Construccion *nueva_construccion = &jugador.construcciones[espacio_encontrado];
-    nueva_construccion->tipo = tipo_construccion;
-    nueva_construccion->x = jugador.x;
-    nueva_construccion->y = jugador.y;
-    nueva_construccion->activa = true;
-    nueva_construccion->durabilidad = 100;
-    nueva_construccion->tiempo_creacion = SDL_GetTicks();
+    // Iniciar nueva construcción
+    construccion_en_progreso = true;
+    tipo_actual = tipo_construccion;
+    espacio_actual = espacio_encontrado;
+    tiempo_inicio_construccion = tiempo_actual;
+
+    // Guardar posición actual del jugador para la construcción
+    posicion_x = jugador.x;
+    posicion_y = jugador.y;
 
     // Consumir recursos
     jugador.inventario[0] -= madera_necesaria;
     jugador.inventario[1] -= piedra_necesaria;
-    jugador.energia = MAX(0, jugador.energia - costo_energia);
+    jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_CONSTRUCCION);
 
-    if (tipo_construccion == TIPO_CULTIVO)
+    // Reproducir sonidos
+    if (estado->sonido_construccion)
     {
-        jugador.inventario[4]--; // Consumir semilla
-    }
-    else if (tipo_construccion == TIPO_REFUGIO)
-    {
-        jugador.tiene_refugio = 1;
+        canal_construccion = Mix_PlayChannel(-1, estado->sonido_construccion, -1);
     }
 
-    printf("Construcción realizada con éxito\n");
+    printf("Comenzando construcción...\n");
 }
 
 void generar_recursos(void)
 {
-    int recursos_generados = 0;
-    while (recursos_generados < MAX_RECURSOS)
-    {
-        int x = rand() % TAM_MAPA;
-        int y = rand() % TAM_MAPA;
-
-        // Verificar si la posición es válida
-        if (forma_isla[y][x] && mapa[y][x] == 2)
-        { // Solo en tierra y pasto
-            recursos[recursos_generados].x = x;
-            recursos[recursos_generados].y = y;
-            recursos[recursos_generados].tipo = rand() % 4; // 0:madera, 1:piedra, 2:fruta, 3:semillas
-            recursos[recursos_generados].activo = 1;
-            recursos_generados++;
-        }
-    }
-}
-void actualizar_stats_jugador(EstadoJuego *estado)
-{
-    static Uint32 ultimo_tiempo_actualizacion = 0;
+    static Uint32 ultimo_tiempo_generacion = 0;
     Uint32 tiempo_actual = SDL_GetTicks();
 
-    if (tiempo_actual - ultimo_tiempo_actualizacion >= 1000)
+    // Verificar si ha pasado suficiente tiempo desde la última generación
+    Uint32 tiempo_minimo = MIN(TIEMPO_REAPARICION_ARBOLES,
+                               MIN(TIEMPO_REAPARICION_ROCAS, TIEMPO_REAPARICION_FRUTAS));
+
+    if (tiempo_actual - ultimo_tiempo_generacion < tiempo_minimo)
     {
-        // Reducir hambre y sed gradualmente
-        jugador.hambre = MAX(0, jugador.hambre - 1);
-        jugador.sed = MAX(0, jugador.sed - 1);
-
-        // Efectos del clima
-        if (estado->clima_actual == CLIMA_TORMENTA)
-        {
-            if (!jugador.tiene_refugio)
-            {
-                jugador.energia = MAX(0, jugador.energia - 2);
-                if (rand() % 5 == 0)
-                {
-                    jugador.salud = MAX(0, jugador.salud - 1);
-                }
-            }
-        }
-
-        // Regenerar sed durante la lluvia si no está en refugio
-        if ((estado->clima_actual == CLIMA_LLUVIOSO || estado->clima_actual == CLIMA_TORMENTA) && !jugador.tiene_refugio)
-        {
-            jugador.sed = MIN(100, jugador.sed + 2);
-        }
-
-        // Regenerar energía si está descansando en refugio
-        if (jugador.tiene_refugio)
-        {
-            for (int i = 0; i < 5; i++)
-            {
-                if (jugador.construcciones[i].activa &&
-                    jugador.construcciones[i].tipo == TIPO_REFUGIO &&
-                    jugador.x == jugador.construcciones[i].x &&
-                    jugador.y == jugador.construcciones[i].y)
-                {
-                    jugador.energia = MIN(100, jugador.energia + 5);
-                    break;
-                }
-            }
-        }
-
-        // Efectos de hambre y sed
-        if (jugador.hambre <= 20 || jugador.sed <= 20)
-        {
-            jugador.salud = MAX(0, jugador.salud - 1);
-        }
-
-        // Regeneración de salud
-        if (jugador.hambre >= 50 && jugador.sed >= 50 &&
-            jugador.energia >= 50 && jugador.salud < jugador.vida_maxima)
-        {
-            jugador.salud = MIN(jugador.vida_maxima, jugador.salud + 1);
-        }
-
-        ultimo_tiempo_actualizacion = tiempo_actual;
+        return; // Si no ha pasado suficiente tiempo, salir de la función
     }
-}
-void actualizar_temperatura_jugador(void)
-{
-    int temp_objetivo = temperatura_ambiente;
 
-    // Modificadores
+    // Contar recursos actuales
+    int arboles = 0, rocas = 0, frutas = 0, semillas = 0;
+    for (int y = 0; y < TAM_MAPA; y++)
+    {
+        for (int x = 0; x < TAM_MAPA; x++)
+        {
+            if (mapa[y][x] == 4)
+                arboles++;
+            if (mapa[y][x] == 3)
+                rocas++;
+        }
+    }
+
+    // Contar frutas y semillas existentes
+    for (int i = 0; i < MAX_RECURSOS; i++)
+    {
+        if (recursos[i].activo)
+        {
+            if (recursos[i].tipo == 2)
+                frutas++;
+            if (recursos[i].tipo == 3)
+                semillas++;
+        }
+    }
+
+    // Generar árboles si es necesario
+    if (arboles < NUM_ARBOLES_INICIAL &&
+        tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_ARBOLES)
+    {
+        int x, y;
+        do
+        {
+            x = rand() % TAM_MAPA;
+            y = rand() % TAM_MAPA;
+        } while (!forma_isla[y][x] || mapa[y][x] != 2);
+        mapa[y][x] = 4;
+    }
+
+    // Generar rocas si es necesario
+    if (rocas < NUM_ROCAS_INICIAL &&
+        tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_ROCAS)
+    {
+        int x, y;
+        do
+        {
+            x = rand() % TAM_MAPA;
+            y = rand() % TAM_MAPA;
+        } while (!forma_isla[y][x] || mapa[y][x] != 2);
+        mapa[y][x] = 3;
+    }
+
+    // Generar frutas si es necesario
+    if (frutas < 5 && tiempo_actual - ultimo_tiempo_generacion >= TIEMPO_REAPARICION_FRUTAS)
+    {
+        int frutas_generadas = 0;
+        for (int i = 0; i < MAX_RECURSOS && frutas_generadas < (5 - frutas); i++)
+        {
+            if (!recursos[i].activo)
+            {
+                int x, y;
+                int intentos = 0;
+                const int MAX_INTENTOS = 100; // Evitar bucle infinito
+
+                do
+                {
+                    x = rand() % TAM_MAPA;
+                    y = rand() % TAM_MAPA;
+                    intentos++;
+                    if (intentos >= MAX_INTENTOS)
+                        break;
+                } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                if (intentos < MAX_INTENTOS)
+                { // Si encontramos una posición válida
+                    recursos[i].x = x;
+                    recursos[i].y = y;
+                    recursos[i].tipo = 2; // Fruta
+                    recursos[i].activo = 1;
+                    frutas_generadas++;
+                }
+            }
+        }
+    }
+
+    // Generar semillas si es necesario
+    if (semillas < 5)
+    {
+        int semillas_generadas = 0;
+        for (int i = 0; i < MAX_RECURSOS && semillas_generadas < (5 - semillas); i++)
+        {
+            if (!recursos[i].activo)
+            {
+                int x, y;
+                int intentos = 0;
+                const int MAX_INTENTOS = 100; // Evitar bucle infinito
+
+                do
+                {
+                    x = rand() % TAM_MAPA;
+                    y = rand() % TAM_MAPA;
+                    intentos++;
+                    if (intentos >= MAX_INTENTOS)
+                        break;
+                } while (!forma_isla[y][x] || mapa[y][x] != 2);
+
+                if (intentos < MAX_INTENTOS)
+                { // Si encontramos una posición válida
+                    recursos[i].x = x;
+                    recursos[i].y = y;
+                    recursos[i].tipo = 3; // Semilla
+                    recursos[i].activo = 1;
+                    semillas_generadas++;
+                }
+            }
+        }
+    }
+
+    ultimo_tiempo_generacion = tiempo_actual;
+}
+
+void actualizar_stats_jugador(EstadoJuego *estado)
+{
+    static Uint32 ultimo_tiempo = 0;
+    static Uint32 ultimo_tiempo_daño_critico = 0;
+    static Uint32 ultimo_tiempo_hambre = 0;
+    static Uint32 ultimo_tiempo_sed = 0;
+    static Uint32 ultimo_tiempo_recuperacion = 0;
+    static Uint32 ultimo_tiempo_energia = 0;
+    static Uint32 ultimo_tiempo_daño_noche = 0;
+    static Uint32 ultimo_tiempo_daño_lluvia = 0;
+    static Uint32 ultimo_tiempo_energia_noche = 0;
+
+    Uint32 tiempo_actual = SDL_GetTicks();
+
+    // Actualizar hambre cada 10 segundos
+    if (tiempo_actual - ultimo_tiempo_hambre >= 10000)
+    {
+        if (jugador.hambre > 0)
+        {
+            jugador.hambre = MAX(0, jugador.hambre - 5);
+        }
+        ultimo_tiempo_hambre = tiempo_actual;
+    }
+
+    // Actualizar sed cada 10 segundos
+    if (tiempo_actual - ultimo_tiempo_sed >= 10000)
+    {
+        if (jugador.sed > 0)
+        {
+            jugador.sed = MAX(0, jugador.sed - 5);
+        }
+        ultimo_tiempo_sed = tiempo_actual;
+    }
+
+    // Daño crítico por hambre o sed cada 5 segundos
+    if ((jugador.hambre <= 20 || jugador.sed <= 20) &&
+        tiempo_actual - ultimo_tiempo_daño_critico >= 5000)
+    {
+        jugador.salud = MAX(0, jugador.salud - 5);
+        ultimo_tiempo_daño_critico = tiempo_actual;
+    }
+
+    // Verificar si está en refugio
+    bool en_refugio = false;
     for (int i = 0; i < 5; i++)
     {
         if (jugador.construcciones[i].activa &&
-            jugador.construcciones[i].tipo == TIPO_FOGATA &&
-            abs(jugador.x - jugador.construcciones[i].x) <= 2 &&
-            abs(jugador.y - jugador.construcciones[i].y) <= 2)
+            jugador.construcciones[i].tipo == TIPO_REFUGIO &&
+            jugador.x == jugador.construcciones[i].x &&
+            jugador.y == jugador.construcciones[i].y)
         {
-            temp_objetivo += 10;
+            en_refugio = true;
             break;
         }
     }
 
-    if (jugador.tiene_refugio &&
-        mapa[jugador.y][jugador.x] == TIPO_REFUGIO)
-        temp_objetivo += 5;
-
-    if (jugador.temperatura < temp_objetivo)
-        jugador.temperatura++;
-    else if (jugador.temperatura > temp_objetivo)
-        jugador.temperatura--;
-
-    if (jugador.temperatura < 10)
+    // Recuperación en refugio (día y noche)
+    if (en_refugio)
     {
-        jugador.energia = MAX(0, jugador.energia - 1);
-        if (jugador.energia <= 0)
-            jugador.salud = MAX(0, jugador.salud - 1);
+        if (tiempo_actual - ultimo_tiempo_recuperacion >= 5000)
+        {
+            if (jugador.energia >= 20 && jugador.sed > 20 && jugador.hambre > 20)
+            {
+                jugador.salud = MIN(jugador.vida_maxima, jugador.salud + 5);
+                jugador.energia = MIN(100, jugador.energia + 10);
+            }
+            ultimo_tiempo_recuperacion = tiempo_actual;
+        }
+
+        // Recuperación extra de energía en refugio
+        if (tiempo_actual - ultimo_tiempo_energia >= 5000)
+        {
+            jugador.energia = MIN(100, jugador.energia + 20);
+            ultimo_tiempo_energia = tiempo_actual;
+        }
     }
-    else if (jugador.temperatura > 35)
+    else
     {
-        jugador.sed = MAX(0, jugador.sed - 2);
-        if (jugador.sed <= 0)
-            jugador.salud = MAX(0, jugador.salud - 1);
+        // Si NO está en refugio, aplicar daños
+
+        // Daño por noche
+        if (!estado->es_de_dia &&
+            tiempo_actual - ultimo_tiempo_daño_noche >= 2000)
+        {
+            jugador.salud = MAX(0, jugador.salud - 2);
+            ultimo_tiempo_daño_noche = tiempo_actual;
+        }
+
+        // Daño por lluvia (solo si no está en refugio)
+        if (estado->clima_actual == CLIMA_LLUVIA &&
+            tiempo_actual - ultimo_tiempo_daño_lluvia >= 3000)
+        {
+            if (estado->es_de_dia)
+            {
+                // Daño por lluvia durante el día
+                jugador.salud = MAX(0, jugador.salud - 2);
+            }
+            else
+            {
+                // Daño por lluvia durante la noche
+                jugador.salud = MAX(0, jugador.salud - 4);
+            }
+            ultimo_tiempo_daño_lluvia = tiempo_actual;
+        }
+
+        // Consumo de energía durante la noche
+        if (!estado->es_de_dia &&
+            tiempo_actual - ultimo_tiempo_energia_noche >= 3000)
+        {
+            jugador.energia = MAX(0, jugador.energia - 4);
+            ultimo_tiempo_energia_noche = tiempo_actual;
+        }
     }
+
+    // Asegurarnos de que las estadísticas nunca excedan sus límites máximos
+    jugador.sed = MIN(100, jugador.sed);
+    jugador.hambre = MIN(100, jugador.hambre);
+    jugador.energia = MIN(100, jugador.energia);
+    jugador.salud = MIN(jugador.vida_maxima, jugador.salud);
 }
 int inicializar_juego(EstadoJuego *estado)
 {
@@ -1119,7 +1667,8 @@ int inicializar_juego(EstadoJuego *estado)
     estado->textura_fruta = IMG_LoadTexture(estado->renderizador, "fruta.png");
     estado->textura_semilla = IMG_LoadTexture(estado->renderizador, "semilla.png");
     estado->textura_personaje_espada = IMG_LoadTexture(estado->renderizador, "personaje_espada.png");
-    estado->textura_personaje_antorcha = IMG_LoadTexture(estado->renderizador, "personaje_antorcha.png");
+    estado->textura_barco = IMG_LoadTexture(estado->renderizador, "barco.png");
+    estado->textura_carne = IMG_LoadTexture(estado->renderizador, "carne.png");
 
     // Cargar fuente
     estado->fuente = TTF_OpenFont("8514oem.ttf", 24);
@@ -1132,6 +1681,9 @@ int inicializar_juego(EstadoJuego *estado)
     estado->sonido_lucha = Mix_LoadWAV("lucha.mp3");
     estado->sonido_construccion = Mix_LoadWAV("construccion.mp3");
     estado->sonido_clima = Mix_LoadWAV("clima.mp3");
+    estado->sonido_fuego = Mix_LoadWAV("fuego.mp3");
+    estado->sonido_victoria = Mix_LoadWAV("victoria.mp3");
+    estado->sonido_gameover = Mix_LoadWAV("gameover.mp3");
 
     // Inicializar variables de juego
     estado->clima_actual = CLIMA_SOLEADO;
@@ -1158,8 +1710,6 @@ void limpiar_juego(EstadoJuego *estado)
         SDL_DestroyTexture(estado->textura_personaje_equipado);
     if (estado->textura_personaje_espada)
         SDL_DestroyTexture(estado->textura_personaje_espada);
-    if (estado->textura_personaje_antorcha)
-        SDL_DestroyTexture(estado->textura_personaje_antorcha);
     if (estado->textura_refugio)
         SDL_DestroyTexture(estado->textura_refugio);
     if (estado->textura_fogata)
@@ -1170,7 +1720,8 @@ void limpiar_juego(EstadoJuego *estado)
         SDL_DestroyTexture(estado->textura_fruta);
     if (estado->textura_semilla)
         SDL_DestroyTexture(estado->textura_semilla);
-
+    if (estado->sonido_fuego)
+        Mix_FreeChunk(estado->sonido_fuego);
     // Liberar recursos de audio
     if (estado->musica_dia)
         Mix_FreeMusic(estado->musica_dia);
@@ -1182,6 +1733,14 @@ void limpiar_juego(EstadoJuego *estado)
         Mix_FreeChunk(estado->sonido_construccion);
     if (estado->sonido_clima)
         Mix_FreeChunk(estado->sonido_clima);
+    if (estado->textura_barco)
+        SDL_DestroyTexture(estado->textura_barco);
+    if (estado->textura_carne)
+        SDL_DestroyTexture(estado->textura_carne);
+    if (estado->sonido_victoria)
+        Mix_FreeChunk(estado->sonido_victoria);
+    if (estado->sonido_gameover)
+        Mix_FreeChunk(estado->sonido_gameover);
 
     // Liberar fuente
     if (estado->fuente)
@@ -1207,35 +1766,70 @@ void limpiar_juego(EstadoJuego *estado)
     IMG_Quit();
     SDL_Quit();
 }
-void manejar_antorcha(EstadoJuego *estado)
-{
-    Uint32 tiempo_actual = SDL_GetTicks();
 
-    // Si tiene antorcha, verificar si se agotó
-    if (jugador.tiene_antorcha)
-    {
-        if (tiempo_actual - jugador.tiempo_inicio_antorcha >= DURACION_ANTORCHA)
-        {
-            jugador.tiene_antorcha = 0;
-            printf("La antorcha se ha agotado\n");
-        }
-    }
-
-    // Si es de día, quitar la antorcha
-    if (estado->es_de_dia && jugador.tiene_antorcha)
-    {
-        jugador.tiene_antorcha = 0;
-        printf("La antorcha se ha apagado por ser de día\n");
-    }
-}
 void actualizar_animales(EstadoJuego *estado)
 {
     static Uint32 ultimo_movimiento = 0;
+    static Uint32 ultimo_tiempo_spawn = 0;
     Uint32 tiempo_actual = SDL_GetTicks();
 
-    if (tiempo_actual - ultimo_movimiento < 500) // Actualizar cada 500ms
-        return;
+    // Contar animales activos
+    int animales_activos = 0;
+    for (int i = 0; i < MAX_ANIMALES; i++)
+    {
+        if (animales[i].activo)
+            animales_activos++;
+    }
 
+    // Generar nuevos animales si es necesario
+    if (animales_activos < NUM_ANIMALES_INICIAL &&
+        tiempo_actual - ultimo_tiempo_spawn >= TIEMPO_REAPARICION_ANIMAL)
+    {
+        for (int i = 0; i < MAX_ANIMALES; i++)
+        {
+            if (!animales[i].activo)
+            {
+                // Generar en los bordes del mapa
+                int lado = rand() % 4;
+                switch (lado)
+                {
+                case 0: // Arriba
+                    animales[i].x = rand() % TAM_MAPA;
+                    animales[i].y = 1;
+                    break;
+                case 1: // Derecha
+                    animales[i].x = TAM_MAPA - 2;
+                    animales[i].y = rand() % TAM_MAPA;
+                    break;
+                case 2: // Abajo
+                    animales[i].x = rand() % TAM_MAPA;
+                    animales[i].y = TAM_MAPA - 2;
+                    break;
+                case 3: // Izquierda
+                    animales[i].x = 1;
+                    animales[i].y = rand() % TAM_MAPA;
+                    break;
+                }
+
+                if (forma_isla[animales[i].y][animales[i].x])
+                {
+                    animales[i].activo = 1;
+                    animales[i].vida = VIDA_ANIMAL;
+                    animales[i].tipo = rand() % 2;
+                    animales[i].ultimo_ataque = tiempo_actual;
+                    animales[i].ultimo_movimiento = tiempo_actual;
+                    animales_activos++;
+                    if (animales_activos >= NUM_ANIMALES_INICIAL)
+                        break;
+                }
+            }
+        }
+        ultimo_tiempo_spawn = tiempo_actual;
+    }
+
+    // Actualizar comportamiento de animales
+    if (tiempo_actual - ultimo_movimiento < RETARDO_MOV_ANIMAL)
+        return;
     ultimo_movimiento = tiempo_actual;
 
     for (int i = 0; i < MAX_ANIMALES; i++)
@@ -1243,12 +1837,17 @@ void actualizar_animales(EstadoJuego *estado)
         if (!animales[i].activo)
             continue;
 
+        // Calcular probabilidad de ataque según el momento del día
+        int prob_ataque = estado->es_de_dia ? PROB_ATAQUE_DIA : PROB_ATAQUE_NOCHE;
+        if (jugador.tiene_refugio)
+            prob_ataque = prob_ataque / 2;
+
         // Calcular distancia al jugador
         int dx = jugador.x - animales[i].x;
         int dy = jugador.y - animales[i].y;
         int distancia = (int)sqrt(dx * dx + dy * dy);
 
-        if (distancia <= RADIO_DETECCION_ANIMAL)
+        if (distancia <= RADIO_DETECCION_ANIMAL && (rand() % 100 < prob_ataque))
         {
             // Perseguir al jugador
             if (dx > 0 && forma_isla[animales[i].y][animales[i].x + 1])
@@ -1261,7 +1860,7 @@ void actualizar_animales(EstadoJuego *estado)
             else if (dy < 0 && forma_isla[animales[i].y - 1][animales[i].x])
                 animales[i].y -= VELOCIDAD_ANIMAL;
 
-            // Si está junto al jugador, atacar
+            // Si está junto al jugador o su refugio, atacar
             if (distancia <= 1)
             {
                 manejar_combate(&animales[i], estado);
@@ -1274,19 +1873,19 @@ void actualizar_animales(EstadoJuego *estado)
             switch (direccion)
             {
             case 0: // Arriba
-                if (forma_isla[animales[i].y - 1][animales[i].x])
+                if (animales[i].y > 0 && forma_isla[animales[i].y - 1][animales[i].x])
                     animales[i].y--;
                 break;
             case 1: // Abajo
-                if (forma_isla[animales[i].y + 1][animales[i].x])
+                if (animales[i].y < TAM_MAPA - 1 && forma_isla[animales[i].y + 1][animales[i].x])
                     animales[i].y++;
                 break;
             case 2: // Izquierda
-                if (forma_isla[animales[i].y][animales[i].x - 1])
+                if (animales[i].x > 0 && forma_isla[animales[i].y][animales[i].x - 1])
                     animales[i].x--;
                 break;
             case 3: // Derecha
-                if (forma_isla[animales[i].y][animales[i].x + 1])
+                if (animales[i].x < TAM_MAPA - 1 && forma_isla[animales[i].y][animales[i].x + 1])
                     animales[i].x++;
                 break;
             }
@@ -1295,42 +1894,114 @@ void actualizar_animales(EstadoJuego *estado)
 }
 void manejar_combate(Animal *animal, EstadoJuego *estado)
 {
+    const Uint8 *keys = SDL_GetKeyboardState(NULL);
     Uint32 tiempo_actual = SDL_GetTicks();
+    static bool ataque_presionado = false;
 
-    if (tiempo_actual - animal->ultimo_ataque < 1000) // Ataque cada segundo
+    // Verificar si el jugador está en un refugio
+    bool en_refugio = false;
+    bool tiene_fogata_cerca = false;
+
+    for (int i = 0; i < 5; i++)
+    {
+        if (jugador.construcciones[i].activa)
+        {
+            // Verificar si está en refugio
+            if (jugador.construcciones[i].tipo == TIPO_REFUGIO &&
+                jugador.x == jugador.construcciones[i].x &&
+                jugador.y == jugador.construcciones[i].y)
+            {
+                en_refugio = true;
+            }
+
+            // Verificar si hay fogata cerca
+            if (jugador.construcciones[i].tipo == TIPO_FOGATA &&
+                abs(jugador.construcciones[i].x - jugador.x) <= 2 &&
+                abs(jugador.construcciones[i].y - jugador.y) <= 2)
+            {
+                tiene_fogata_cerca = true;
+            }
+        }
+    }
+
+    // Si está en refugio y tiene fogata cerca, no permitir el ataque
+    if (en_refugio && tiene_fogata_cerca)
+    {
         return;
+    }
 
-    animal->ultimo_ataque = tiempo_actual;
+    // Verificar el ataque del animal (cada segundo)
+    if (tiempo_actual - animal->ultimo_ataque >= 1000)
+    {
+        animal->ultimo_ataque = tiempo_actual;
 
-    // El animal ataca al jugador
-    if (!jugador.tiene_armadura)
-        jugador.salud -= ATAQUE_ANIMAL;
+        // El animal ataca al jugador
+        if (!jugador.tiene_armadura)
+            jugador.salud -= DAÑO_ANIMAL;
+        else
+            jugador.salud -= DAÑO_ANIMAL / 2;
+    }
+
+    // Ataque del jugador
+    if (keys[SDL_SCANCODE_RETURN]) // Si ENTER está presionado
+    {
+        if (!ataque_presionado) // Solo si no estaba presionado antes
+        {
+            ataque_presionado = true;
+
+            // Aplicar daño al animal
+            if (jugador.tiene_espada)
+                animal->vida -= DAÑO_ESPADA;
+            else
+                animal->vida -= ATAQUE_BASE;
+
+            // Reproducir sonido de lucha
+            Mix_PlayChannel(-1, estado->sonido_lucha, 0);
+
+            // Consumir energía por luchar (si es necesario)
+            if (jugador.energia >= COSTO_ENERGIA_CONSTRUCCION)
+            {
+                jugador.energia = MAX(0, jugador.energia - COSTO_ENERGIA_CONSTRUCCION);
+            }
+        }
+    }
     else
-        jugador.salud -= ATAQUE_ANIMAL / 2;
-
-    // El jugador ataca al animal
-    if (jugador.tiene_espada)
-        animal->vida -= DAÑO_ESPADA;
-    else
-        animal->vida -= ATAQUE_BASE;
-
-    // Reproducir sonido de lucha
-    Mix_PlayChannel(-1, estado->sonido_lucha, 0);
+    {
+        ataque_presionado = false; // Resetear el estado cuando se suelta la tecla
+    }
 
     // Verificar si el animal muere
     if (animal->vida <= 0)
     {
+        // Crear un nuevo recurso de carne en la posición del animal
+        for (int i = 0; i < MAX_RECURSOS; i++)
+        {
+            if (!recursos[i].activo)
+            {
+                recursos[i].x = animal->x;
+                recursos[i].y = animal->y;
+                recursos[i].tipo = 4; // Nuevo tipo para carne
+                recursos[i].activo = 1;
+                break;
+            }
+        }
         animal->activo = 0;
-        jugador.inventario[2] += 2; // Dar carne al jugador
     }
-
-    jugador.energia = MAX(0, jugador.energia - 5); // Consumir energía por luchar
 }
 // Nuevas funciones para crafteo
 void crear_espada(void)
 {
     if (jugador.tiene_espada)
+    {
+        printf("Ya tienes una espada equipada.\n");
         return;
+    }
+
+    if (jugador.energia < COSTO_ENERGIA_CONSTRUCCION)
+    {
+        printf("No tienes suficiente energía para crear una espada.\n");
+        return;
+    }
 
     if (jugador.inventario[0] >= COSTO_ESPADA_MADERA &&
         jugador.inventario[1] >= COSTO_ESPADA_PIEDRA)
@@ -1339,13 +2010,35 @@ void crear_espada(void)
         jugador.inventario[1] -= COSTO_ESPADA_PIEDRA;
         jugador.tiene_espada = 1;
         jugador.ataque_actual = ATAQUE_ESPADA;
+        jugador.energia -= COSTO_ENERGIA_CONSTRUCCION;
+        printf("¡Has creado una espada!\n");
+    }
+    else
+    {
+        printf("No tienes suficientes recursos para crear una espada.\n");
+        printf("Necesitas: %d madera y %d piedra.\n", COSTO_ESPADA_MADERA, COSTO_ESPADA_PIEDRA);
     }
 }
 
 void crear_armadura(void)
 {
-    if (!jugador.tiene_espada || jugador.tiene_armadura)
+    if (!jugador.tiene_espada)
+    {
+        printf("Necesitas tener una espada para crear una armadura.\n");
         return;
+    }
+
+    if (jugador.tiene_armadura)
+    {
+        printf("Ya tienes una armadura equipada.\n");
+        return;
+    }
+
+    if (jugador.energia < COSTO_ENERGIA_CONSTRUCCION)
+    {
+        printf("No tienes suficiente energía para crear una armadura.\n");
+        return;
+    }
 
     if (jugador.inventario[0] >= COSTO_ARMADURA_MADERA &&
         jugador.inventario[1] >= COSTO_ARMADURA_PIEDRA)
@@ -1354,6 +2047,12 @@ void crear_armadura(void)
         jugador.inventario[1] -= COSTO_ARMADURA_PIEDRA;
         jugador.tiene_armadura = 1;
         jugador.vida_maxima = VIDA_ARMADURA;
+        jugador.energia -= COSTO_ENERGIA_CONSTRUCCION;
+    }
+    else
+    {
+        printf("No tienes suficientes recursos para crear una armadura.\n");
+        printf("Necesitas: %d madera y %d piedra.\n", COSTO_ARMADURA_MADERA, COSTO_ARMADURA_PIEDRA);
     }
 }
 void inicializar_mapa(void)
@@ -1416,7 +2115,6 @@ void inicializar_jugador(void)
     jugador.hambre = VIDA_BASE;
     jugador.sed = VIDA_BASE;
     jugador.energia = 100;
-    jugador.temperatura = 20;
     jugador.tiene_espada = 0;
     jugador.tiene_armadura = 0;
     jugador.tiene_refugio = 0;
@@ -1430,54 +2128,61 @@ void inicializar_jugador(void)
 
 int main(int argc, char *argv[])
 {
+    // Semilla para generación aleatoria
     srand(time(NULL));
 
+    // Variables principales del juego
     EstadoJuego estado;
     SDL_Event evento;
     int ejecutando = 1;
-    Uint32 ultimo_tiempo_actualizacion = 0;
     Uint32 ultimo_tiempo_recursos = 0;
-    const int MS_POR_FRAME = 16;
+    const int MS_POR_FRAME = 16; // Tiempo por frame (aproximadamente 60 FPS)
     bool pausa = false;
 
+    // Inicialización del juego
     if (!inicializar_juego(&estado))
     {
         printf("Error al inicializar el juego\n");
         return 1;
     }
 
+    // Inicialización de otros elementos del juego
     inicializar_jugador();
     inicializar_mapa();
     generar_recursos();
 
+    // Iniciar música de día si está disponible
     if (estado.musica_dia)
     {
         Mix_PlayMusic(estado.musica_dia, -1);
     }
 
+    // Bucle principal del juego
     while (ejecutando)
     {
         Uint32 tiempo_inicio_frame = SDL_GetTicks();
 
+        // Manejo de entrada del usuario
         manejar_entrada(&evento, &ejecutando, &estado);
 
+        // Detectar tecla ESC para pausar o continuar
         const Uint8 *keys = SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_ESCAPE])
         {
-            pausa = !pausa;
-            SDL_Delay(200);
+            pausa = !pausa; // Alterna entre pausa y juego
+            SDL_Delay(200); // Evitar múltiples cambios rápidos
         }
 
-        if (!pausa && jugador.salud > 0)
+        if (!pausa && jugador.salud > 0) // Solo actualizar si no está en pausa
         {
+            // Actualizaciones del juego
             actualizar_ciclo_dia_noche(&estado);
             actualizar_clima(&estado);
-            actualizar_temperatura_jugador();
             actualizar_construcciones();
             actualizar_animales(&estado);
             actualizar_stats_jugador(&estado);
-            manejar_antorcha(&estado);
 
+            // Generar nuevos recursos cada 10 segundos
             Uint32 tiempo_actual = SDL_GetTicks();
             if (tiempo_actual - ultimo_tiempo_recursos >= 10000)
             {
@@ -1495,28 +2200,21 @@ int main(int argc, char *argv[])
                 ultimo_tiempo_recursos = tiempo_actual;
             }
 
-            if (estado.es_de_dia)
+            // Penalización si no hay refugio durante la noche
+            if (!jugador.tiene_refugio && !estado.es_de_dia && rand() % 100 < 10)
             {
-                if (rand() % 100 < 5 && jugador.sed < VIDA_BASE)
-                {
-                    jugador.sed++;
-                }
-            }
-            else
-            {
-                if (!jugador.tiene_refugio && rand() % 100 < 10)
-                {
-                    jugador.energia = MAX(0, jugador.energia - 1);
-                }
+                jugador.energia = MAX(0, jugador.energia - 1);
             }
         }
 
+        // Renderizar la escena del juego
         renderizar_juego(&estado);
 
+        // Renderizar superposición de pausa si está activa
         if (pausa)
         {
             SDL_SetRenderDrawBlendMode(estado.renderizador, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(estado.renderizador, 0, 0, 0, 128);
+            SDL_SetRenderDrawColor(estado.renderizador, 0, 0, 0, 128); // Fondo semi-transparente
             SDL_Rect overlay = {0, 0, ANCHO_VENTANA, ALTO_VENTANA};
             SDL_RenderFillRect(estado.renderizador, &overlay);
 
@@ -1526,15 +2224,22 @@ int main(int argc, char *argv[])
             SDL_RenderPresent(estado.renderizador);
         }
 
+        // Controlar el tiempo de cada frame
         Uint32 duracion_frame = SDL_GetTicks() - tiempo_inicio_frame;
         if (duracion_frame < MS_POR_FRAME)
         {
             SDL_Delay(MS_POR_FRAME - duracion_frame);
         }
 
+        // Comprobación de fin de juego
         if (jugador.salud <= 0)
         {
+            // Detener música y reproducir sonido de game over
             Mix_HaltMusic();
+            if (estado.sonido_gameover)
+            {
+                Mix_PlayChannel(-1, estado.sonido_gameover, 0);
+            }
 
             SDL_SetRenderDrawColor(estado.renderizador, 0, 0, 0, 255);
             SDL_RenderClear(estado.renderizador);
@@ -1543,11 +2248,13 @@ int main(int argc, char *argv[])
             SDL_Color color_blanco = {255, 255, 255, 255};
 
             renderizar_texto(&estado, "GAME OVER", ANCHO_VENTANA / 2 - 100, ALTO_VENTANA / 2 - 50, color_rojo);
-            renderizar_texto(&estado, "Presiona ENTER para reiniciar", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 10, color_blanco);
-            renderizar_texto(&estado, "Presiona ESC para salir", ANCHO_VENTANA / 2 - 150, ALTO_VENTANA / 2 + 50, color_blanco);
+            renderizar_texto(&estado, "ENTER - Volver a intentar", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 10, color_blanco);
+            renderizar_texto(&estado, "ESPACIO - Nueva partida", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 40, color_blanco);
+            renderizar_texto(&estado, "ESC - Salir", ANCHO_VENTANA / 2 - 200, ALTO_VENTANA / 2 + 70, color_blanco);
 
             SDL_RenderPresent(estado.renderizador);
 
+            // Manejo de entrada en pantalla de GAME OVER
             bool esperando_input = true;
             while (esperando_input)
             {
@@ -1560,29 +2267,29 @@ int main(int argc, char *argv[])
                     }
                     else if (evento.type == SDL_KEYDOWN)
                     {
-                        if (evento.key.keysym.sym == SDLK_RETURN)
+                        switch (evento.key.keysym.sym)
                         {
-                            inicializar_jugador();
-                            inicializar_mapa();
-                            generar_recursos();
-                            if (estado.musica_dia)
-                            {
-                                Mix_PlayMusic(estado.musica_dia, -1);
-                            }
+                        case SDLK_RETURN:
+                            reiniciar_partida(false, &estado); // Volver a intentar
                             esperando_input = false;
-                        }
-                        else if (evento.key.keysym.sym == SDLK_ESCAPE)
-                        {
+                            break;
+                        case SDLK_SPACE:
+                            reiniciar_partida(true, &estado); // Nueva partida
+                            esperando_input = false;
+                            break;
+                        case SDLK_ESCAPE:
                             esperando_input = false;
                             ejecutando = 0;
+                            break;
                         }
                     }
                 }
-                SDL_Delay(16);
+                SDL_Delay(16); // Evitar alta carga de CPU durante la espera
             }
         }
     }
 
+    // Liberar recursos al finalizar el juego
     limpiar_juego(&estado);
     return 0;
 }
